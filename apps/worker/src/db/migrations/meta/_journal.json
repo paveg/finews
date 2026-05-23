@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1779532050483,
+      "tag": "0000_cheerful_exiles",
+      "breakpoints": true
+    }
+  ]
+}

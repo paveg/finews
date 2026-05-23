@@ -7,6 +7,7 @@ compatibility_flags = ["nodejs_compat"]
 binding = "DB"
 database_name = "finews"
 database_id = "475f3d97-f340-4ebc-80da-ca9b00042b77"
+migrations_dir = "src/db/migrations"
 
 [vars]
 ENVIRONMENT = "development"
