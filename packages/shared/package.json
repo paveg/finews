@@ -1,0 +1,14 @@
+{
+  "name": "@finews/shared",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./src/schemas.ts",
+  "types": "./src/schemas.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "valibot": "^1.4.0"
+  }
+}
