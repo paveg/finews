@@ -5,7 +5,7 @@
 | Date | 2026-05-23 |
 | Status | Draft (ユーザーレビュー待ち) |
 | Owner | @paveg |
-| 関連 ADR | [0001](../../adr/0001-cloudflare-workers-d1-stack.md) [0002](../../adr/0002-two-stage-llm-summarization.md) [0003](../../adr/0003-discord-domain-split-delivery.md) [0004](../../adr/0004-etf-flow-data-source-strategy.md) [0005](../../adr/0005-cron-trigger-job-architecture.md) |
+| 関連 ADR | [0001](../../adr/0001-cloudflare-workers-d1-stack.md) [0002](../../adr/0002-two-stage-llm-summarization.md) [0003](../../adr/0003-discord-domain-split-delivery.md) [0004](../../adr/0004-etf-flow-data-source-strategy.md) [0005](../../adr/0005-cron-trigger-job-architecture.md) [0006](../../adr/0006-cost-spike-guardrails.md) |
 
 ## 1. プロジェクト目的
 
@@ -339,6 +339,7 @@ prompt caching の最小キャッシュサイズ:
 3. **TDnet 開示の取得方法**(公式 RSS なしを確認、HTML scrape の難度と利用規約)
 4. **Yahoo Finance の `^SOX` などインデックス取得が Workers から安定するか**
 5. **Discord Webhook の SUPPRESS_NOTIFICATIONS flag (4096) が現在も有効か**
+6. **Anthropic Console で月予算 $20 設定** が完了しているか(ADR-0006 Layer 1、Phase 1 開始時の必須手順)
 
 ## 15. Phase ロードマップ
 
@@ -460,3 +461,4 @@ ENVIRONMENT = "production"
 | 読解教育 | プロンプトで用語注釈・読み解きポイント | Stage 2 仕様 |
 | ブログ化 | Phase 4 で保留 | 公開意思が固まったら |
 | メモリ活用 | D1 集約のみ、Vectorize は当面不要 | Phase 2 で評価 |
+| コスト暴走対策 | 多層防御(Console 月予算 + ジョブ内ハードリミット + リトライ上限) | ADR-0006 |

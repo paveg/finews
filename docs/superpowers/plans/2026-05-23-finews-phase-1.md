@@ -27,6 +27,8 @@
 | dedup (sha256 + URL 正規化)+ TDD | 継続テーマスコア(Phase 1.5) |
 | 簡易 watchlist マッチ(ticker 完全一致) | alias マッチング(Phase 1.5) |
 | Cron Trigger 設定 + 手動リハ | 休場日処理(Phase 1.5) |
+| **Budget guard + retry + cost 記録(ADR-0006)** | LLM-as-judge 品質テスト |
+| **Anthropic Console 月予算 $20 設定(手動)** | (上記の Layer 1) |
 
 ## File Structure
 
@@ -62,12 +64,16 @@ finews/
 │       │   │   └── migrations/  (Task 3, generated)
 │       │   ├── config/
 │       │   │   ├── sources.ts   (Task 5)
-│       │   │   └── watchlist.ts (Task 10)
+│       │   │   ├── watchlist.ts (Task 10)
+│       │   │   └── budget.ts    (Task 6.5)
 │       │   └── lib/
-│       │       └── dedup.ts     (Task 6)
+│       │       ├── dedup.ts        (Task 6)
+│       │       ├── budget-guard.ts (Task 6.5)
+│       │       └── retry.ts        (Task 6.5)
 │       └── test/
 │           ├── lib/
-│           │   └── dedup.test.ts        (Task 6)
+│           │   ├── dedup.test.ts         (Task 6)
+│           │   └── budget-guard.test.ts  (Task 6.5)
 │           ├── summarizer/
 │           │   └── stage1.test.ts       (Task 9)
 │           └── fixtures/
@@ -421,9 +427,12 @@ export const deliveries = sqliteTable('deliveries', {
   id: text('id').primaryKey(),
   jobType: text('job_type').notNull(),
   step: text('step').notNull(),
-  status: text('status').notNull(),
+  status: text('status').notNull(), // 'success' | 'failed' | 'skipped' | 'budget_exceeded'
   error: text('error'),
   durationMs: integer('duration_ms'),
+  inputTokens: integer('input_tokens'),
+  outputTokens: integer('output_tokens'),
+  costUsdMicro: integer('cost_usd_micro'),
   attemptedAt: integer('attempted_at').notNull(),
 });
 ```
@@ -776,6 +785,248 @@ Expected: 全テスト PASS
 ```bash
 git add apps/worker/vitest.config.ts apps/worker/test/lib/dedup.test.ts apps/worker/src/lib/dedup.ts
 git commit -m "feat: add URL normalization and sha256 article id (TDD)"
+```
+
+---
+
+## Task 6.5: Budget guard と retry 実装(ADR-0006)
+
+**Files:**
+- Create: `apps/worker/src/config/budget.ts`
+- Create: `apps/worker/src/lib/budget-guard.ts`
+- Create: `apps/worker/src/lib/retry.ts`
+- Create: `apps/worker/test/lib/budget-guard.test.ts`
+
+- [ ] **Step 1: config/budget.ts を作成**
+
+```typescript
+export const BUDGET = {
+  MAX_STAGE1_CALLS_PER_JOB: 30,
+  MAX_STAGE2_CALLS_PER_JOB: 5,
+  MAX_INPUT_TOKENS_PER_JOB: 200_000,
+  MAX_OUTPUT_TOKENS_PER_JOB: 50_000,
+  MAX_RETRIES: 3,
+  BACKOFF_BASE_MS: 1000,
+} as const;
+
+export const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  'claude-haiku-4-5-20251001': { input: 1, output: 5 },
+  'claude-sonnet-4-6':         { input: 3, output: 15 },
+  'claude-opus-4-7':           { input: 5, output: 25 },
+};
+
+export type ModelId = keyof typeof MODEL_PRICING | string;
+```
+
+- [ ] **Step 2: budget-guard.ts の failing test を書く (Red)**
+
+`apps/worker/test/lib/budget-guard.test.ts`:
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import {
+  BudgetTracker,
+  BudgetExceededError,
+  estimateCostMicroUsd,
+} from '../../src/lib/budget-guard';
+
+describe('BudgetTracker', () => {
+  it('allows calls under the limit', () => {
+    const t = new BudgetTracker();
+    t.recordCall('stage1', 'claude-haiku-4-5-20251001', 1000, 200);
+    expect(t.summary().stage1Calls).toBe(1);
+    expect(t.summary().inputTokens).toBe(1000);
+  });
+
+  it('throws BudgetExceededError when stage1 call count exceeds limit', () => {
+    const t = new BudgetTracker();
+    for (let i = 0; i < 30; i++) {
+      t.recordCall('stage1', 'claude-haiku-4-5-20251001', 10, 10);
+    }
+    expect(() => t.assertCanCall('stage1')).toThrow(BudgetExceededError);
+  });
+
+  it('throws BudgetExceededError when input tokens exceed limit', () => {
+    const t = new BudgetTracker();
+    t.recordCall('stage1', 'claude-haiku-4-5-20251001', 200_001, 0);
+    expect(() => t.assertCanCall('stage1')).toThrow(BudgetExceededError);
+  });
+
+  it('accumulates cost across multiple calls', () => {
+    const t = new BudgetTracker();
+    t.recordCall('stage1', 'claude-haiku-4-5-20251001', 1_000_000, 0);
+    t.recordCall('stage2', 'claude-sonnet-4-6', 1_000_000, 0);
+    // Haiku: $1/M input = 1_000_000 micro USD
+    // Sonnet: $3/M input = 3_000_000 micro USD
+    expect(t.summary().costUsdMicro).toBe(4_000_000);
+  });
+});
+
+describe('estimateCostMicroUsd', () => {
+  it('computes Haiku cost correctly', () => {
+    // $1 input + $5 output per MTok
+    expect(
+      estimateCostMicroUsd('claude-haiku-4-5-20251001', 1000, 100),
+    ).toBe(1000 * 1 + 100 * 5);
+  });
+
+  it('returns 0 for unknown model', () => {
+    expect(estimateCostMicroUsd('unknown-model', 1000, 100)).toBe(0);
+  });
+});
+```
+
+- [ ] **Step 3: テスト実行で失敗確認**
+
+Run: `cd apps/worker && pnpm test test/lib/budget-guard.test.ts`
+Expected: FAIL — `Cannot find module '../../src/lib/budget-guard'`
+
+- [ ] **Step 4: budget-guard.ts を実装 (Green)**
+
+`apps/worker/src/lib/budget-guard.ts`:
+
+```typescript
+import { BUDGET, MODEL_PRICING } from '../config/budget';
+
+export type CallStage = 'stage1' | 'stage2';
+
+export class BudgetExceededError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'BudgetExceededError';
+  }
+}
+
+export function estimateCostMicroUsd(
+  model: string,
+  inputTokens: number,
+  outputTokens: number,
+): number {
+  const p = MODEL_PRICING[model];
+  if (!p) return 0;
+  return Math.ceil(p.input * inputTokens + p.output * outputTokens);
+}
+
+export type BudgetSummary = {
+  stage1Calls: number;
+  stage2Calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  costUsdMicro: number;
+};
+
+export class BudgetTracker {
+  private stage1Calls = 0;
+  private stage2Calls = 0;
+  private inputTokens = 0;
+  private outputTokens = 0;
+  private costUsdMicro = 0;
+
+  assertCanCall(stage: CallStage): void {
+    if (stage === 'stage1' && this.stage1Calls >= BUDGET.MAX_STAGE1_CALLS_PER_JOB) {
+      throw new BudgetExceededError(
+        `Stage 1 call limit reached: ${this.stage1Calls}/${BUDGET.MAX_STAGE1_CALLS_PER_JOB}`,
+      );
+    }
+    if (stage === 'stage2' && this.stage2Calls >= BUDGET.MAX_STAGE2_CALLS_PER_JOB) {
+      throw new BudgetExceededError(
+        `Stage 2 call limit reached: ${this.stage2Calls}/${BUDGET.MAX_STAGE2_CALLS_PER_JOB}`,
+      );
+    }
+    if (this.inputTokens >= BUDGET.MAX_INPUT_TOKENS_PER_JOB) {
+      throw new BudgetExceededError(
+        `Input token limit reached: ${this.inputTokens}/${BUDGET.MAX_INPUT_TOKENS_PER_JOB}`,
+      );
+    }
+    if (this.outputTokens >= BUDGET.MAX_OUTPUT_TOKENS_PER_JOB) {
+      throw new BudgetExceededError(
+        `Output token limit reached: ${this.outputTokens}/${BUDGET.MAX_OUTPUT_TOKENS_PER_JOB}`,
+      );
+    }
+  }
+
+  recordCall(
+    stage: CallStage,
+    model: string,
+    inputTokens: number,
+    outputTokens: number,
+  ): void {
+    if (stage === 'stage1') this.stage1Calls += 1;
+    if (stage === 'stage2') this.stage2Calls += 1;
+    this.inputTokens += inputTokens;
+    this.outputTokens += outputTokens;
+    this.costUsdMicro += estimateCostMicroUsd(model, inputTokens, outputTokens);
+  }
+
+  summary(): BudgetSummary {
+    return {
+      stage1Calls: this.stage1Calls,
+      stage2Calls: this.stage2Calls,
+      inputTokens: this.inputTokens,
+      outputTokens: this.outputTokens,
+      costUsdMicro: this.costUsdMicro,
+    };
+  }
+}
+```
+
+- [ ] **Step 5: テスト実行で合格確認**
+
+Run: `cd apps/worker && pnpm test test/lib/budget-guard.test.ts`
+Expected: 全テスト PASS
+
+- [ ] **Step 6: retry.ts を実装**
+
+`apps/worker/src/lib/retry.ts`:
+
+```typescript
+import { BUDGET } from '../config/budget';
+
+const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
+
+export type RetryOptions = {
+  maxAttempts?: number;
+  backoffBaseMs?: number;
+};
+
+function isRetryable(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const status = (err as { status?: number }).status;
+  return typeof status === 'number' && RETRYABLE_STATUSES.has(status);
+}
+
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  opts: RetryOptions = {},
+): Promise<T> {
+  const maxAttempts = opts.maxAttempts ?? BUDGET.MAX_RETRIES;
+  const backoffBase = opts.backoffBaseMs ?? BUDGET.BACKOFF_BASE_MS;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (!isRetryable(err)) throw err;
+      if (attempt === maxAttempts - 1) break;
+      const delay = backoffBase * Math.pow(2, attempt);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw lastErr;
+}
+```
+
+- [ ] **Step 7: typecheck**
+
+Run: `pnpm typecheck`
+Expected: エラーなし
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add apps/worker/src/config/budget.ts apps/worker/src/lib/budget-guard.ts apps/worker/src/lib/retry.ts apps/worker/test/lib/budget-guard.test.ts
+git commit -m "feat: add budget guard and retry policy (ADR-0006)"
 ```
 
 ---
@@ -1419,9 +1670,21 @@ git commit -m "feat: add Discord webhook notifier for single embed"
 
 ## Task 13: Daily ジョブ配線と scheduled handler
 
+> **注(ADR-0006)**: Task 6.5 で実装した `BudgetTracker` と `withRetry` を以下のように組み込むこと:
+> - `runDaily` 開始時に `tracker = new BudgetTracker()` を生成
+> - Stage 1/2 の各呼び出し**前**に `tracker.assertCanCall('stage1' | 'stage2')`
+> - 各呼び出し**後**に `tracker.recordCall(stage, model, response.usage.input_tokens, response.usage.output_tokens)`
+> - Anthropic SDK 呼び出しは `withRetry(() => ...)` でラップ
+> - `BudgetExceededError` を捕捉した時は `deliveries` に `status: 'budget_exceeded'` を記録し、Anthropic を**再呼び出しせず**プレーンテキストの「予算上限到達」通知を Discord に送って終了
+> - ジョブ末尾の `deliveries.insert` で `inputTokens` / `outputTokens` / `costUsdMicro` を `tracker.summary()` から埋める
+
+`extractArticle` と `generateDailySummary` のシグネチャを `(input, apiKey, tracker)` に拡張し、関数内部で `tracker.assertCanCall` / `tracker.recordCall` を呼ぶ実装に変更すること(Task 9 / Task 11 のコードは tracker 引数なし版だが、ここで拡張する)。
+
 **Files:**
 - Create: `apps/worker/src/jobs/daily.ts`
 - Modify: `apps/worker/src/index.ts`
+- Modify: `apps/worker/src/summarizer/stage1.ts` (tracker 引数追加)
+- Modify: `apps/worker/src/summarizer/stage2_daily.ts` (tracker 引数追加)
 
 - [ ] **Step 1: jobs/daily.ts を実装**
 
@@ -1622,6 +1885,16 @@ crons = [
 ```
 
 注: Phase 1 は daily のみ。market/weekly/monthly は Phase 1.5 以降。
+
+- [ ] **Step 1.5: Anthropic Console で月予算を設定(ADR-0006 Layer 1)**
+
+ブラウザで `https://console.anthropic.com/settings/billing` を開き:
+
+1. **Monthly spend limit** を **$20 USD** に設定
+2. **Usage alerts** で **50% / 80%** を有効化(email 通知)
+3. 設定後、画面の合計予算が "$20.00 / month" になっていることを確認
+
+これは API レイヤーの最後の砦で、コード側の budget guard が全て失敗しても月 $20 を超えない保証になる。**コードを書く前にやっておくのが望ましいが、Phase 1 終盤のここで必ず確認する**。
 
 - [ ] **Step 2: シークレットを設定**
 
