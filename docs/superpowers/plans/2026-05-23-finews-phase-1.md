@@ -166,22 +166,25 @@ packages:
     "db:migrate:remote": "wrangler d1 migrations apply finews --remote"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.30.0",
-    "drizzle-orm": "^0.36.0",
-    "fast-xml-parser": "^4.5.0",
-    "hono": "^4.6.0",
-    "valibot": "^1.0.0"
+    "@anthropic-ai/sdk": "^0.98.0",
+    "drizzle-orm": "^0.45.0",
+    "fast-xml-parser": "^5.0.0",
+    "hono": "^4.12.0",
+    "valibot": "^1.4.0"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.5.0",
-    "@cloudflare/workers-types": "^4.20260101.0",
-    "drizzle-kit": "^0.29.0",
-    "typescript": "^5.6.0",
-    "vitest": "^2.0.0",
-    "wrangler": "^3.90.0"
+    "@cloudflare/vitest-pool-workers": "^0.16.0",
+    "@cloudflare/workers-types": "^4.20260523.0",
+    "drizzle-kit": "^0.31.0",
+    "typescript": "^5.9.0",
+    "vite": "^8.0.0",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.0.0"
   }
 }
 ```
+
+注: バージョンは 2026-05-23 時点の最新。`vite` は `@cloudflare/vitest-pool-workers` の peer dependency 要件(vite ^6/^7/^8)を満たすために devDependencies に明示的に追加している。
 
 - [ ] **Step 5: apps/worker/tsconfig.json を作成**
 
