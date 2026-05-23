@@ -1,0 +1,12 @@
+{
+  "name": "finews",
+  "private": true,
+  "version": "0.0.1",
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "dev": "pnpm --filter worker dev",
+    "deploy": "pnpm --filter worker deploy",
+    "test": "pnpm --filter worker test",
+    "typecheck": "pnpm -r typecheck"
+  }
+}
