@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Cloudflare Workers
+.wrangler/
+
+# Environment
+.env
+.env.local
+.dev.vars
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Claude local settings
+.claude/settings.local.json
