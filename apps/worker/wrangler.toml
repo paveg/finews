@@ -10,7 +10,9 @@ database_id = "475f3d97-f340-4ebc-80da-ca9b00042b77"
 migrations_dir = "src/db/migrations"
 
 [vars]
-ENVIRONMENT = "development"
+# 本番デフォルト。ローカル `wrangler dev` 時は `.dev.vars` で上書き:
+#   ENVIRONMENT="development"
+ENVIRONMENT = "production"
 
 [triggers]
 crons = [
