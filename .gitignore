@@ -28,3 +28,8 @@ dist/
 
 # Source verification results
 scripts/verify-results-*.md
+
+# Temp files (sed -i.tmp, editor backups)
+*.tmp
+*.bak
+*.broken
