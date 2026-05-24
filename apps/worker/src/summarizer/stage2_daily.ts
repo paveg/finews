@@ -41,7 +41,6 @@ export async function generateDailySummary(
   tracker.recordCall('stage2', model, response.usage.input_tokens, response.usage.output_tokens);
 
   return response.content
-    .filter((b) => b.type === 'text')
     .map((b) => (b.type === 'text' ? b.text : ''))
     .join('');
 }

@@ -34,7 +34,6 @@ export async function extractArticle(
   tracker.recordCall('stage1', model, response.usage.input_tokens, response.usage.output_tokens);
 
   const text = response.content
-    .filter((b) => b.type === 'text')
     .map((b) => (b.type === 'text' ? b.text : ''))
     .join('');
 

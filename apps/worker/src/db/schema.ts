@@ -7,6 +7,20 @@ import {
   primaryKey,
 } from 'drizzle-orm/sqlite-core';
 
+// Phase 1 actively populates: `articles`, `deliveries`.
+// Phase 1.5+ populates: `watchlist` (alias matching), `marketSnapshots`,
+// `etfSnapshots`, `summaries`, `glossary`.
+// All tables are defined upfront per design spec to keep migrations linear.
+//
+// Timestamp convention (Drizzle hook):
+//   - Mutable tables (`articles`, `watchlist`, `glossary`) carry
+//     `createdAt` + `updatedAt` (ISO 8601 text, UTC).
+//   - Immutable single-event tables (`summaries`, `marketSnapshots`,
+//     `etfSnapshots`, `deliveries`) use a single domain-named timestamp
+//     per the exception in the hook — row creation IS the only event.
+
+const timestampDefault = () => new Date().toISOString();
+
 export const articles = sqliteTable(
   'articles',
   {
@@ -15,13 +29,17 @@ export const articles = sqliteTable(
     domain: text('domain').notNull(),
     url: text('url').notNull(),
     title: text('title').notNull(),
-    publishedAt: integer('published_at').notNull(),
+    publishedAt: text('published_at').notNull(),
     extractedJson: text('extracted_json'),
     watchlistMatched: integer('watchlist_matched', { mode: 'boolean' })
       .notNull()
       .default(false),
     continuingThemeScore: integer('continuing_theme_score').notNull().default(0),
-    createdAt: integer('created_at').notNull(),
+    createdAt: text('created_at').notNull().$defaultFn(timestampDefault),
+    updatedAt: text('updated_at')
+      .notNull()
+      .$defaultFn(timestampDefault)
+      .$onUpdate(timestampDefault),
   },
   (t) => ({
     publishedIdx: index('idx_articles_published').on(t.publishedAt),
@@ -32,6 +50,7 @@ export const articles = sqliteTable(
   }),
 );
 
+// Immutable: one row per (jobType, domain, deliveredAt). `deliveredAt` is the only event.
 export const summaries = sqliteTable(
   'summaries',
   {
@@ -41,7 +60,7 @@ export const summaries = sqliteTable(
     content: text('content').notNull(),
     articleIds: text('article_ids').notNull(),
     modelUsed: text('model_used').notNull(),
-    deliveredAt: integer('delivered_at').notNull(),
+    deliveredAt: text('delivered_at').notNull().$defaultFn(timestampDefault),
   },
   (t) => ({
     jobTypeIdx: index('idx_summaries_job').on(t.jobType, t.deliveredAt),
@@ -55,27 +74,33 @@ export const watchlist = sqliteTable('watchlist', {
   tags: text('tags').notNull(),
   aliases: text('aliases').notNull().default('[]'),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
-  addedAt: integer('added_at').notNull(),
+  createdAt: text('created_at').notNull().$defaultFn(timestampDefault),
+  updatedAt: text('updated_at')
+    .notNull()
+    .$defaultFn(timestampDefault)
+    .$onUpdate(timestampDefault),
 });
 
+// Immutable daily snapshot: composite PK (snapshotDate, symbol) IS the event.
 export const marketSnapshots = sqliteTable(
   'market_snapshots',
   {
-    date: integer('date').notNull(),
+    snapshotDate: text('snapshot_date').notNull(),
     symbol: text('symbol').notNull(),
     price: real('price').notNull(),
     changePct1d: real('change_pct_1d'),
     rawJson: text('raw_json'),
   },
   (t) => ({
-    pk: primaryKey({ columns: [t.date, t.symbol] }),
+    pk: primaryKey({ columns: [t.snapshotDate, t.symbol] }),
   }),
 );
 
+// Immutable daily snapshot: composite PK (snapshotDate, symbol) IS the event.
 export const etfSnapshots = sqliteTable(
   'etf_snapshots',
   {
-    date: integer('date').notNull(),
+    snapshotDate: text('snapshot_date').notNull(),
     symbol: text('symbol').notNull(),
     domain: text('domain').notNull(),
     price: real('price').notNull(),
@@ -89,19 +114,23 @@ export const etfSnapshots = sqliteTable(
     rawJson: text('raw_json'),
   },
   (t) => ({
-    pk: primaryKey({ columns: [t.date, t.symbol] }),
-    symbolDateIdx: index('idx_etf_symbol_date').on(t.symbol, t.date),
+    pk: primaryKey({ columns: [t.snapshotDate, t.symbol] }),
+    symbolDateIdx: index('idx_etf_symbol_date').on(t.symbol, t.snapshotDate),
   }),
 );
 
 export const glossary = sqliteTable('glossary', {
   term: text('term').primaryKey(),
   definition: text('definition').notNull(),
-  firstSeenAt: integer('first_seen_at').notNull(),
-  lastSeenAt: integer('last_seen_at').notNull(),
   occurrenceCount: integer('occurrence_count').notNull().default(1),
+  createdAt: text('created_at').notNull().$defaultFn(timestampDefault),
+  updatedAt: text('updated_at')
+    .notNull()
+    .$defaultFn(timestampDefault)
+    .$onUpdate(timestampDefault),
 });
 
+// Immutable job-attempt log: one row per (jobType, step, attemptedAt). `attemptedAt` is the only event.
 export const deliveries = sqliteTable('deliveries', {
   id: text('id').primaryKey(),
   jobType: text('job_type').notNull(),
@@ -112,5 +141,5 @@ export const deliveries = sqliteTable('deliveries', {
   inputTokens: integer('input_tokens'),
   outputTokens: integer('output_tokens'),
   costUsdMicro: integer('cost_usd_micro'),
-  attemptedAt: integer('attempted_at').notNull(),
+  attemptedAt: text('attempted_at').notNull().$defaultFn(timestampDefault),
 });

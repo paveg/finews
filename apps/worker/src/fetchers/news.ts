@@ -9,7 +9,7 @@ export type FetchedArticle = {
   url: string;
   title: string;
   description: string;
-  publishedAt: number; // unix ms
+  publishedAt: string; // ISO 8601 UTC, lexicographically sortable
 };
 
 async function fetchOne(source: NewsSource): Promise<FetchedArticle[]> {
@@ -43,8 +43,8 @@ async function fetchOne(source: NewsSource): Promise<FetchedArticle[]> {
     const description = String(item.description ?? '').trim().slice(0, 500);
     const pubDateRaw =
       item.pubDate ?? item['dc:date'] ?? item.date ?? new Date().toISOString();
-    const publishedAt = new Date(String(pubDateRaw)).getTime();
-    if (Number.isNaN(publishedAt)) continue;
+    const pubDate = new Date(String(pubDateRaw));
+    if (Number.isNaN(pubDate.getTime())) continue;
 
     out.push({
       id: await articleId(url),
@@ -53,7 +53,7 @@ async function fetchOne(source: NewsSource): Promise<FetchedArticle[]> {
       url,
       title,
       description,
-      publishedAt,
+      publishedAt: pubDate.toISOString(),
     });
   }
   return out;

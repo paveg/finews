@@ -21,22 +21,7 @@ export type DailyEmbed = {
   body: string;
 };
 
-export async function sendDailyEmbed(
-  webhookUrl: string,
-  embed: DailyEmbed,
-): Promise<void> {
-  const description = embed.body.slice(0, 4000); // safety margin
-  const payload = {
-    embeds: [
-      {
-        title: `📰 ${DOMAIN_TITLES[embed.domain] ?? embed.domain}`,
-        description,
-        color: DOMAIN_COLORS[embed.domain] ?? 0x95a5a6,
-        timestamp: new Date().toISOString(),
-        footer: { text: 'finews / Sonnet 4.6' },
-      },
-    ],
-  };
+async function postWebhook(webhookUrl: string, payload: unknown): Promise<void> {
   const res = await fetch(webhookUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -47,16 +32,26 @@ export async function sendDailyEmbed(
   }
 }
 
+export async function sendDailyEmbed(
+  webhookUrl: string,
+  embed: DailyEmbed,
+): Promise<void> {
+  await postWebhook(webhookUrl, {
+    embeds: [
+      {
+        title: `📰 ${DOMAIN_TITLES[embed.domain] ?? embed.domain}`,
+        description: embed.body.slice(0, 4000),
+        color: DOMAIN_COLORS[embed.domain] ?? 0x95a5a6,
+        timestamp: new Date().toISOString(),
+        footer: { text: 'finews / Sonnet 4.6' },
+      },
+    ],
+  });
+}
+
 export async function sendPlainText(
   webhookUrl: string,
   content: string,
 ): Promise<void> {
-  const res = await fetch(webhookUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content }),
-  });
-  if (!res.ok) {
-    throw new Error(`Discord webhook failed: ${res.status} ${await res.text()}`);
-  }
+  await postWebhook(webhookUrl, { content });
 }

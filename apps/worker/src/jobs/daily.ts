@@ -13,6 +13,7 @@ import type { Env } from '../index';
 
 const PHASE_1_DOMAIN: Domain = 'semiconductor';
 const MAX_ARTICLES_FOR_STAGE2 = 6;
+const DEDUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 export async function runDaily(env: Env): Promise<void> {
   const db = createDb(env.DB);
@@ -27,18 +28,18 @@ export async function runDaily(env: Env): Promise<void> {
     );
     const candidates = fetched.filter((a) => targetSourceIds.has(a.source));
 
-    // 2. dedup: compare against past 7 days
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    // 2. dedup: compare against past 7 days (ISO strings sort lexicographically)
+    const sevenDaysAgoIso = new Date(Date.now() - DEDUP_WINDOW_MS).toISOString();
     const existingRows = await db
       .select({ id: articles.id })
       .from(articles)
-      .where(gte(articles.publishedAt, sevenDaysAgo));
+      .where(gte(articles.publishedAt, sevenDaysAgoIso));
     const existing = new Set(existingRows.map((r) => r.id));
     const fresh = candidates.filter((a) => !existing.has(a.id));
 
     // 3. rank by recency, cap at 15
     const ranked = fresh
-      .sort((a, b) => b.publishedAt - a.publishedAt)
+      .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
       .slice(0, 15);
 
     // 4. Stage 1 with concurrency 3
@@ -54,9 +55,7 @@ export async function runDaily(env: Env): Promise<void> {
           ).then((ex) => ({ raw: a, ex })),
         ),
       );
-      for (let idx = 0; idx < results.length; idx++) {
-        const r = results[idx];
-        if (!r) continue;
+      for (const [idx, r] of results.entries()) {
         if (r.status === 'fulfilled') {
           extracted.push(r.value);
         } else {
@@ -72,8 +71,7 @@ export async function runDaily(env: Env): Promise<void> {
       }
     }
 
-    // 5. Persist articles
-    const now = Date.now();
+    // 5. Persist articles (createdAt/updatedAt filled by $defaultFn)
     for (const { raw, ex } of extracted) {
       await db
         .insert(articles)
@@ -87,7 +85,6 @@ export async function runDaily(env: Env): Promise<void> {
           extractedJson: JSON.stringify(ex),
           watchlistMatched: isWatchlistMatched(ex.tickers),
           continuingThemeScore: 0,
-          createdAt: now,
         })
         .onConflictDoNothing();
     }
@@ -112,7 +109,6 @@ export async function runDaily(env: Env): Promise<void> {
         inputTokens: summary.inputTokens,
         outputTokens: summary.outputTokens,
         costUsdMicro: summary.costUsdMicro,
-        attemptedAt: now,
       });
       return;
     }
@@ -141,7 +137,6 @@ export async function runDaily(env: Env): Promise<void> {
       inputTokens: finalSummary.inputTokens,
       outputTokens: finalSummary.outputTokens,
       costUsdMicro: finalSummary.costUsdMicro,
-      attemptedAt: now,
     });
 
     console.log({
@@ -156,7 +151,6 @@ export async function runDaily(env: Env): Promise<void> {
   } catch (err) {
     if (err instanceof BudgetExceededError) {
       const summary = tracker.summary();
-      const now = Date.now();
       console.warn({ job: 'daily', budget_exceeded: err.message, summary });
       await db.insert(deliveries).values({
         id: crypto.randomUUID(),
@@ -168,13 +162,17 @@ export async function runDaily(env: Env): Promise<void> {
         inputTokens: summary.inputTokens,
         outputTokens: summary.outputTokens,
         costUsdMicro: summary.costUsdMicro,
-        attemptedAt: now,
       });
       // Plain-text Discord notification — does NOT call Anthropic again
       try {
         await sendPlainText(
           env.DISCORD_WEBHOOK_URL,
-          `⚠️ finews: 予算上限到達のため daily ジョブを中断しました\n${err.message}\nStage1 calls: ${summary.stage1Calls}, Stage2 calls: ${summary.stage2Calls}, cost: $${(summary.costUsdMicro / 1_000_000).toFixed(4)}`,
+          [
+            '⚠️ finews: 予算上限到達のため daily ジョブを中断しました',
+            err.message,
+            `Stage1 calls: ${summary.stage1Calls}, Stage2 calls: ${summary.stage2Calls}`,
+            `Cost: $${(summary.costUsdMicro / 1_000_000).toFixed(4)}`,
+          ].join('\n'),
         );
       } catch (notifyErr) {
         console.error({ notifyErr: String(notifyErr) });

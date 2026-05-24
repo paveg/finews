@@ -4,11 +4,12 @@ CREATE TABLE `articles` (
 	`domain` text NOT NULL,
 	`url` text NOT NULL,
 	`title` text NOT NULL,
-	`published_at` integer NOT NULL,
+	`published_at` text NOT NULL,
 	`extracted_json` text,
 	`watchlist_matched` integer DEFAULT false NOT NULL,
 	`continuing_theme_score` integer DEFAULT 0 NOT NULL,
-	`created_at` integer NOT NULL
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL
 );
 --> statement-breakpoint
 CREATE INDEX `idx_articles_published` ON `articles` (`published_at`);--> statement-breakpoint
@@ -23,11 +24,11 @@ CREATE TABLE `deliveries` (
 	`input_tokens` integer,
 	`output_tokens` integer,
 	`cost_usd_micro` integer,
-	`attempted_at` integer NOT NULL
+	`attempted_at` text NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE `etf_snapshots` (
-	`date` integer NOT NULL,
+	`snapshot_date` text NOT NULL,
 	`symbol` text NOT NULL,
 	`domain` text NOT NULL,
 	`price` real NOT NULL,
@@ -39,25 +40,25 @@ CREATE TABLE `etf_snapshots` (
 	`flow_1d` real,
 	`flow_5d` real,
 	`raw_json` text,
-	PRIMARY KEY(`date`, `symbol`)
+	PRIMARY KEY(`snapshot_date`, `symbol`)
 );
 --> statement-breakpoint
-CREATE INDEX `idx_etf_symbol_date` ON `etf_snapshots` (`symbol`,`date`);--> statement-breakpoint
+CREATE INDEX `idx_etf_symbol_date` ON `etf_snapshots` (`symbol`,`snapshot_date`);--> statement-breakpoint
 CREATE TABLE `glossary` (
 	`term` text PRIMARY KEY NOT NULL,
 	`definition` text NOT NULL,
-	`first_seen_at` integer NOT NULL,
-	`last_seen_at` integer NOT NULL,
-	`occurrence_count` integer DEFAULT 1 NOT NULL
+	`occurrence_count` integer DEFAULT 1 NOT NULL,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE `market_snapshots` (
-	`date` integer NOT NULL,
+	`snapshot_date` text NOT NULL,
 	`symbol` text NOT NULL,
 	`price` real NOT NULL,
 	`change_pct_1d` real,
 	`raw_json` text,
-	PRIMARY KEY(`date`, `symbol`)
+	PRIMARY KEY(`snapshot_date`, `symbol`)
 );
 --> statement-breakpoint
 CREATE TABLE `summaries` (
@@ -67,7 +68,7 @@ CREATE TABLE `summaries` (
 	`content` text NOT NULL,
 	`article_ids` text NOT NULL,
 	`model_used` text NOT NULL,
-	`delivered_at` integer NOT NULL
+	`delivered_at` text NOT NULL
 );
 --> statement-breakpoint
 CREATE INDEX `idx_summaries_job` ON `summaries` (`job_type`,`delivered_at`);--> statement-breakpoint
@@ -78,5 +79,6 @@ CREATE TABLE `watchlist` (
 	`tags` text NOT NULL,
 	`aliases` text DEFAULT '[]' NOT NULL,
 	`is_active` integer DEFAULT true NOT NULL,
-	`added_at` integer NOT NULL
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL
 );

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "a2dd6920-95f1-4ad4-bb45-782a7787e1aa",
+  "id": "4682241a-19b8-4d90-aeef-f6dec4945b88",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "articles": {
@@ -44,7 +44,7 @@
         },
         "published_at": {
           "name": "published_at",
-          "type": "integer",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -74,7 +74,14 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "integer",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -170,7 +177,7 @@
         },
         "attempted_at": {
           "name": "attempted_at",
-          "type": "integer",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -185,9 +192,9 @@
     "etf_snapshots": {
       "name": "etf_snapshots",
       "columns": {
-        "date": {
-          "name": "date",
-          "type": "integer",
+        "snapshot_date": {
+          "name": "snapshot_date",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -275,19 +282,19 @@
           "name": "idx_etf_symbol_date",
           "columns": [
             "symbol",
-            "date"
+            "snapshot_date"
           ],
           "isUnique": false
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "etf_snapshots_date_symbol_pk": {
+        "etf_snapshots_snapshot_date_symbol_pk": {
           "columns": [
-            "date",
+            "snapshot_date",
             "symbol"
           ],
-          "name": "etf_snapshots_date_symbol_pk"
+          "name": "etf_snapshots_snapshot_date_symbol_pk"
         }
       },
       "uniqueConstraints": {},
@@ -310,20 +317,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "first_seen_at": {
-          "name": "first_seen_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "last_seen_at": {
-          "name": "last_seen_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "occurrence_count": {
           "name": "occurrence_count",
           "type": "integer",
@@ -331,6 +324,20 @@
           "notNull": true,
           "autoincrement": false,
           "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
         }
       },
       "indexes": {},
@@ -342,9 +349,9 @@
     "market_snapshots": {
       "name": "market_snapshots",
       "columns": {
-        "date": {
-          "name": "date",
-          "type": "integer",
+        "snapshot_date": {
+          "name": "snapshot_date",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -381,12 +388,12 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "market_snapshots_date_symbol_pk": {
+        "market_snapshots_snapshot_date_symbol_pk": {
           "columns": [
-            "date",
+            "snapshot_date",
             "symbol"
           ],
-          "name": "market_snapshots_date_symbol_pk"
+          "name": "market_snapshots_snapshot_date_symbol_pk"
         }
       },
       "uniqueConstraints": {},
@@ -439,7 +446,7 @@
         },
         "delivered_at": {
           "name": "delivered_at",
-          "type": "integer",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -507,9 +514,16 @@
           "autoincrement": false,
           "default": true
         },
-        "added_at": {
-          "name": "added_at",
-          "type": "integer",
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
