@@ -5,8 +5,14 @@
   "packageManager": "pnpm@9.0.0",
   "scripts": {
     "dev": "pnpm --filter worker dev",
-    "deploy": "pnpm --filter worker deploy",
+    "build": "pnpm -r typecheck",
+    "deploy": "pnpm --filter worker run deploy",
     "test": "pnpm --filter worker test",
     "typecheck": "pnpm -r typecheck"
+  },
+  "pnpm": {
+    "overrides": {
+      "esbuild": "^0.25.0"
+    }
   }
 }

@@ -18,3 +18,10 @@ ENVIRONMENT = "production"
 crons = [
   "30 21 * * SUN-THU",
 ]
+
+# Persistent Workers Logs (console.log/warn/error が Dashboard の Logs
+# タブで検索可能になる)。Paid プランで月 20M logs 無料、finews 規模
+# では充分。tail と違いセッション終了後も残るので障害解析に必須。
+[observability]
+enabled = true
+head_sampling_rate = 1
