@@ -10,5 +10,8 @@
   },
   "dependencies": {
     "valibot": "^1.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0"
   }
 }
