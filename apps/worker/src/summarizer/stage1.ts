@@ -5,6 +5,88 @@ import { STAGE1_SYSTEM, stage1UserPrompt } from './prompts';
 import { BudgetTracker } from '../lib/budget-guard';
 import { withRetry } from '../lib/retry';
 
+// Tool 定義で input_schema を強制する。tool_choice で extract_article を必ず
+// 呼ばせ、required フィールドの欠落を Claude 側で防ぐ。プロンプトベースの
+// JSON 出力は守られない場合があるため、Phase 1 終盤で tool use 化。
+const EXTRACT_TOOL: Anthropic.Messages.Tool = {
+  name: 'extract_article',
+  description: 'Extract structured financial signals from one news article.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      headline_ja: {
+        type: 'string',
+        maxLength: 80,
+        description: '日本語の短い見出し(80字以内)。事実を圧縮する。',
+      },
+      category: {
+        type: 'string',
+        enum: ['earnings', 'policy', 'product', 'macro_indicator', 'm&a', 'other'],
+      },
+      tickers: {
+        type: 'array',
+        items: { type: 'string' },
+        description: '正規化されたティッカー (例: "NVDA", "6857.T")。無ければ空配列。',
+      },
+      ticker_aliases_used: {
+        type: 'array',
+        items: { type: 'string' },
+        description: '記事中の表記 (例: "Nvidia", "エヌビディア")。無ければ空配列。',
+      },
+      indicators: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'マクロ指標名 (例: "CPI", "FOMC")。無ければ空配列。',
+      },
+      key_numbers: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            label: { type: 'string' },
+            value: { type: 'string' },
+          },
+          required: ['label', 'value'],
+        },
+      },
+      significance: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 5,
+        description: '1=些末, 3=注目, 5=市場を動かす重要材料',
+      },
+      rationale: {
+        type: 'string',
+        maxLength: 60,
+        description: 'なぜ重要かの 60 字以内説明',
+      },
+      glossary_terms: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            term: { type: 'string' },
+            definition: { type: 'string', maxLength: 50 },
+          },
+          required: ['term', 'definition'],
+        },
+        description: '専門用語(最大3つ、基本用語 GDP/CPI/FOMC/決算/為替/利回り/ETF は除外)',
+      },
+    },
+    required: [
+      'headline_ja',
+      'category',
+      'tickers',
+      'ticker_aliases_used',
+      'indicators',
+      'key_numbers',
+      'significance',
+      'rationale',
+      'glossary_terms',
+    ],
+  },
+};
+
 export type Stage1Input = {
   title: string;
   description: string;
@@ -23,6 +105,8 @@ export async function extractArticle(
       model,
       max_tokens: 1024,
       system: STAGE1_SYSTEM,
+      tools: [EXTRACT_TOOL],
+      tool_choice: { type: 'tool', name: 'extract_article' },
       messages: [
         {
           role: 'user',
@@ -30,20 +114,17 @@ export async function extractArticle(
         },
       ],
     }),
-  );
+  ) as Anthropic.Messages.Message;
   tracker.recordCall('stage1', model, response.usage.input_tokens, response.usage.output_tokens);
 
-  const text = response.content
-    .map((b) => (b.type === 'text' ? b.text : ''))
-    .join('');
+  const toolUse = response.content.find(
+    (b): b is Anthropic.Messages.ToolUseBlock => b.type === 'tool_use',
+  );
+  if (!toolUse) {
+    throw new Error(
+      `Stage 1: model did not invoke extract_article tool. content=${JSON.stringify(response.content).slice(0, 300)}`,
+    );
+  }
 
-  // モデルが ```json ... ``` を返すケースに備えて剥がす
-  const jsonStr = text
-    .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/, '')
-    .replace(/```$/, '')
-    .trim();
-
-  const parsed = JSON.parse(jsonStr);
-  return v.parse(ExtractedArticleSchema, parsed);
+  return v.parse(ExtractedArticleSchema, toolUse.input);
 }
