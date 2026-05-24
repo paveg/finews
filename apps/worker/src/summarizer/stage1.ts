@@ -1,6 +1,10 @@
 import Anthropic from '@anthropic-ai/sdk';
 import * as v from 'valibot';
-import { ExtractedArticleSchema, type ExtractedArticle } from '@finews/shared';
+import {
+  EXTRACTED_LIMITS,
+  ExtractedArticleSchema,
+  type ExtractedArticle,
+} from '@finews/shared';
 import { STAGE1_SYSTEM, stage1UserPrompt } from './prompts';
 import { BudgetTracker } from '../lib/budget-guard';
 import { withRetry } from '../lib/retry';
@@ -126,5 +130,20 @@ export async function extractArticle(
     );
   }
 
-  return v.parse(ExtractedArticleSchema, toolUse.input);
+  const raw = v.parse(ExtractedArticleSchema, toolUse.input);
+
+  // Canonicalize: LLM が maxLength を超過することがあるため、契約値に正規化する。
+  // schema 側で maxLength を持たないのは、超過時に全体失敗(=コスト全損)するより
+  // truncate して使う方が ROI が高いという判断 (@finews/shared schemas.ts コメント参照)。
+  return {
+    ...raw,
+    headline_ja: raw.headline_ja.slice(0, EXTRACTED_LIMITS.HEADLINE_JA_MAX),
+    rationale: raw.rationale.slice(0, EXTRACTED_LIMITS.RATIONALE_MAX),
+    glossary_terms: raw.glossary_terms
+      .slice(0, EXTRACTED_LIMITS.GLOSSARY_TERMS_MAX_COUNT)
+      .map((t) => ({
+        term: t.term,
+        definition: t.definition.slice(0, EXTRACTED_LIMITS.GLOSSARY_DEFINITION_MAX),
+      })),
+  };
 }
