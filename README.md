@@ -9,6 +9,7 @@ Cloudflare Workers + D1 + Hono + Drizzle + Anthropic API で構築。
 - ADR: [`docs/adr/`](docs/adr/)(0001〜0006)
 - Phase 1 実装計画: [`docs/superpowers/plans/2026-05-23-finews-phase-1.md`](docs/superpowers/plans/2026-05-23-finews-phase-1.md)
 - Phase 1.5 申し送り: [`docs/superpowers/specs/2026-05-24-phase-1.5-handoff.md`](docs/superpowers/specs/2026-05-24-phase-1.5-handoff.md)
+- **手動作業 runbook**(初回デプロイ・シークレットローテーション・月次運用・障害対応): [`docs/operations.md`](docs/operations.md)
 
 ## ステータス
 
@@ -47,6 +48,8 @@ curl "http://localhost:8787/__scheduled?cron=30+21+*+*+0-4"
 ```
 
 ## デプロイ
+
+詳細手順とチェックリストは [`docs/operations.md`](docs/operations.md)。以下は概要。
 
 ### 1. Anthropic Console で月予算 $20 を設定(ADR-0006 Layer 1)
 
