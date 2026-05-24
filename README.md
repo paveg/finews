@@ -55,26 +55,28 @@ curl "http://localhost:8787/__scheduled?cron=30+21+*+*+0-4"
 
 ブラウザで `https://console.anthropic.com/settings/billing` を開き、**Monthly spend limit = $20 USD** を設定。Usage alerts(50% / 80%)も有効化。
 
-### 2. シークレット設定
-
-```bash
-cd apps/worker
-pnpm wrangler secret put ANTHROPIC_API_KEY
-pnpm wrangler secret put DISCORD_WEBHOOK_URL
-```
-
-### 3. 本番 D1 にマイグレーション適用
+### 2. 本番 D1 にマイグレーション適用
 
 ```bash
 cd apps/worker
 pnpm db:migrate:remote
 ```
 
-### 4. デプロイ
+### 3. デプロイ
 
 ```bash
 cd apps/worker
 pnpm deploy
+```
+
+> `wrangler secret put` は Worker が Cloudflare 側に存在しないと "Worker not found" になるため、**deploy → secrets の順**で実行する。
+
+### 4. シークレット設定
+
+```bash
+cd apps/worker
+pnpm wrangler secret put ANTHROPIC_API_KEY
+pnpm wrangler secret put DISCORD_WEBHOOK_URL
 ```
 
 ### 5. リハーサル
