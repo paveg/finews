@@ -66,7 +66,7 @@ pnpm db:migrate:remote
 
 ```bash
 cd apps/worker
-pnpm deploy
+pnpm run deploy
 ```
 
 > `wrangler secret put` は Worker が Cloudflare 側に存在しないと "Worker not found" になるため、**deploy → secrets の順**で実行する。
@@ -97,7 +97,7 @@ curl "http://localhost:8787/__scheduled?cron=30+21+*+*+0-4"
 | `pnpm typecheck` | 全ワークスペースの TypeScript チェック |
 | `pnpm test` | Vitest 実行 |
 | `pnpm dev` | wrangler dev でローカル起動 |
-| `pnpm deploy` | wrangler deploy で本番デプロイ |
+| `pnpm run deploy`(子 workspace 内) | wrangler deploy で本番デプロイ。`run` を省略すると pnpm built-in の workspace deploy が走るので注意 |
 | `cd apps/worker && pnpm db:generate` | drizzle-kit でマイグレーション生成 |
 | `cd apps/worker && pnpm db:migrate:local` | ローカル D1 にマイグレーション適用 |
 | `cd apps/worker && pnpm db:migrate:remote` | 本番 D1 にマイグレーション適用 |

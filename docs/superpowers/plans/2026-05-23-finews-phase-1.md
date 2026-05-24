@@ -1916,7 +1916,7 @@ Expected: 全テーブルが本番 D1 に作成される旨のログ
 
 - [ ] **Step 4: deploy**
 
-Run: `cd apps/worker && pnpm deploy`
+Run: `cd apps/worker && pnpm run deploy`(`run` を省くと pnpm built-in の workspace deploy が走る)
 Expected: `https://finews.<account>.workers.dev` にデプロイされる
 
 - [ ] **Step 5: ローカルで scheduled handler を発火**

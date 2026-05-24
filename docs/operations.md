@@ -49,13 +49,15 @@ pnpm db:migrate:remote
 
 ```bash
 cd /Users/ryota/repos/github.com/paveg/finews/apps/worker
-pnpm deploy
+pnpm run deploy
 ```
 
 - [ ] 出力に `https://finews.<account>.workers.dev` が表示されることを確認
 - [ ] Cloudflare Dashboard → Workers & Pages → finews が `Active` 表示
 
-> **重要**: `wrangler secret put` は対象 Worker が Cloudflare 側に存在していないと "Worker not found" になる。**secrets は deploy の後**に登録する(Step 6)。
+> **`pnpm deploy` ではなく `pnpm run deploy`**: pnpm の `deploy` は built-in workspace コマンドで、`run` を省略するとそちらが呼ばれて `ERR_PNPM_NOTHING_TO_DEPLOY` になる。
+>
+> **secrets は deploy より前でも後でも OK**: wrangler 4 は secret put 時に Worker 未作成だと対話的に "create a new Worker?" と聞いてくれて、Yes で skeleton を作成する。順序の安全性は気にしなくてよい(現行 runbook は migrate → deploy → secrets の順で揃えてある)。
 
 ### Step 6: シークレットを Workers に登録
 
@@ -217,7 +219,7 @@ Cron Trigger を一時的に止めたい場合:
 cd /Users/ryota/repos/github.com/paveg/finews/apps/worker
 # wrangler.toml の triggers.crons を空配列 [] に編集
 # その後:
-pnpm deploy
+pnpm run deploy
 ```
 
 再開時は配列を元に戻して再 `deploy`。
