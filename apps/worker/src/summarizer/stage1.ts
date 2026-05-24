@@ -139,14 +139,14 @@ export async function extractArticle(
   // LLM の癖補正: tool input_schema で array 指定しても、要素 1 件のとき
   // Claude が裸の文字列/オブジェクトで返すことがある(例: tickers: "9020.T")。
   // Valibot が型エラーで失敗する前にスカラ → 配列に正規化する。
-  const input = toolUse.input as Record<string, unknown>;
+  const rawInput = toolUse.input as Record<string, unknown>;
   const normalized = {
-    ...input,
-    tickers: ensureArray(input.tickers),
-    ticker_aliases_used: ensureArray(input.ticker_aliases_used),
-    indicators: ensureArray(input.indicators),
-    key_numbers: ensureArray(input.key_numbers),
-    glossary_terms: ensureArray(input.glossary_terms),
+    ...rawInput,
+    tickers: ensureArray(rawInput.tickers),
+    ticker_aliases_used: ensureArray(rawInput.ticker_aliases_used),
+    indicators: ensureArray(rawInput.indicators),
+    key_numbers: ensureArray(rawInput.key_numbers),
+    glossary_terms: ensureArray(rawInput.glossary_terms),
   };
   const raw = v.parse(ExtractedArticleSchema, normalized);
 
