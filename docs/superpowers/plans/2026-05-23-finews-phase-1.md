@@ -1948,14 +1948,30 @@ git commit -m "feat: enable daily cron trigger and deploy to production"
 
 ## Phase 1 完了条件チェックリスト
 
-- [ ] `pnpm typecheck` がエラーなしで完了する
-- [ ] `pnpm test` で dedup と Stage 1 のテストが PASS する
-- [ ] 手動 cron 発火で Discord に半導体領域のダイジェスト 1 通が届く
-- [ ] `articles` テーブルに最低 1 件のレコードが入る
-- [ ] `deliveries` テーブルに `success` レコードが入る
-- [ ] 翌平日 6:30 JST に自動配信が走り、Discord に届く
+- [x] `pnpm typecheck` がエラーなしで完了する(2026-05-24 確認)
+- [x] `pnpm test` で dedup と budget-guard のテストが PASS する(12 passed、Stage 1 live API は 3 skipped — API key 設定後にローカルで実行)
+- [ ] 手動 cron 発火で Discord に半導体領域のダイジェスト 1 通が届く(Task 14 Step F、ユーザー手動)
+- [ ] `articles` テーブルに最低 1 件のレコードが入る(同上)
+- [ ] `deliveries` テーブルに `success` レコードが入る(同上)
+- [ ] 翌平日 6:30 JST に自動配信が走り、Discord に届く(ユーザー観察)
 
 完了したら Phase 1.5 へ進む(残り 3 領域、ETF、watchlist alias、継続テーマスコア)。
+
+---
+
+## 実装中の規約変更・修正履歴
+
+Phase 1 実装中に判明し、設計に取り込んだ変更:
+
+1. **依存バージョン全体最新化** (commit `6bc1417`) — 当初の plan は古い caret range を採用していたが、wrangler 3 → 4、drizzle-orm 0.36 → 0.45、@anthropic-ai/sdk 0.30 → 0.98 など、2026-05-23 時点の latest に揃え直した。Task 1 の `apps/worker/package.json` の依存ブロックは現状の最新版を反映済み。
+
+2. **コスト暴走対策の組込み** (ADR-0006、Task 6.5、commit `2fa880d` / `59a1c08`) — 当初 plan には budget guard が無く、レビューで欠落が判明。Task 6.5 を挿入し、`BudgetTracker` / `withRetry` / `deliveries` 拡張(input/output tokens + cost)を全 Stage に適用。
+
+3. **Reuters / Yahoo Finance が 401** (Task 4 検証結果) — `scripts/verify-sources.sh` で確認。Phase 1 は FRB / BOJ / Nikkei xTech / BBC Business の 4 ソースで運用。Phase 1.5 で Yahoo Finance の代替検討が必要。
+
+4. **Drizzle タイムスタンプ規約適用** (commit `6882c4d`) — Drizzle ハーネスの「createdAt + updatedAt 必須、SQLite は ISO 8601 text」規約に合わせて全テーブルを refactor。可変テーブルに `createdAt` / `updatedAt`、不変単一イベントテーブル(`summaries` / `marketSnapshots` / `etfSnapshots` / `deliveries`)はドメイン名タイムスタンプのまま例外適用。snapshot 系は `date` → `snapshotDate` にリネーム。初回マイグレーション `0000_*.sql` はリモート未適用だったため `rm` + `db:generate` で再生成。Task 3 の schema コードブロックは古い integer 版のまま残しているが、現行の `apps/worker/src/db/schema.ts` を正とする。
+
+5. **コード単純化** (commit `6882c4d`) — Phase 1 完了時の横断レビューで判明した重複・冗長を整理: stage1/stage2 のテキスト抽出(filter+map → map のみ)、discord.ts の `postWebhook` 抽出、daily.ts の `for...of + .entries()`、Discord BudgetExceeded メッセージの行分割。
 
 ---
 

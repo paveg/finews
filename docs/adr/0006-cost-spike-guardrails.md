@@ -78,7 +78,9 @@ export async function withRetry<T>(
 ### deliveries テーブル拡張
 
 ```typescript
-// db/schema.ts
+// db/schema.ts (immutable single-event テーブル: attemptedAt が唯一のドメインイベント)
+const timestampDefault = () => new Date().toISOString();
+
 export const deliveries = sqliteTable('deliveries', {
   id: text('id').primaryKey(),
   jobType: text('job_type').notNull(),
@@ -89,11 +91,11 @@ export const deliveries = sqliteTable('deliveries', {
   inputTokens: integer('input_tokens'),
   outputTokens: integer('output_tokens'),
   costUsdMicro: integer('cost_usd_micro'),// 10^-6 USD 単位
-  attemptedAt: integer('attempted_at').notNull(),
+  attemptedAt: text('attempted_at').notNull().$defaultFn(timestampDefault),
 });
 ```
 
-毎ジョブのトークン使用量とコスト概算を残し、異常検知の事後分析に使う。
+毎ジョブのトークン使用量とコスト概算を残し、異常検知の事後分析に使う。タイムスタンプは ISO 8601 UTC(text)。`deliveries` は insert 専用なので、Drizzle ハーネスの「immutable single-event」例外に該当し `createdAt` + `updatedAt` ペアは不要。
 
 ### コスト計算
 

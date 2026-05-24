@@ -162,8 +162,16 @@ finews/
 - `watchlist` に `aliases: text` (JSON array) 追加 — 例: NVDA なら `["Nvidia", "エヌビディア", "ｴﾇﾋﾞﾃﾞｨｱ"]`
 - `etf_snapshots` の `flow_1d` / `flow_5d` を `nullable` に(Phase 1.5 で取れない銘柄向け)
 - `deliveries` を**ジョブログ全般**に転用:
-  - `id`, `job_type`, `step` ('fetch_news' | 'stage1' | 'stage2_domain_X' | 'discord_send' | ...)
-  - `status`, `error`, `duration_ms`, `attempted_at`
+  - `id`, `job_type`, `step` ('stage1' | 'stage2_<domain>' | 'budget_guard' | ...)
+  - `status` ('success' | 'failed' | 'skipped' | 'budget_exceeded')
+  - `error`, `duration_ms`, `input_tokens`, `output_tokens`, `cost_usd_micro`, `attempted_at`
+
+### タイムスタンプ規約(Drizzle ハーネス)
+
+- すべてのタイムスタンプは **text ISO 8601 UTC**(`new Date().toISOString()`)
+- 可変テーブル(`articles` / `watchlist` / `glossary`)は `createdAt` + `updatedAt` を `$defaultFn` + `$onUpdate` で持つ
+- 不変単一イベントテーブル(`summaries` / `marketSnapshots` / `etfSnapshots` / `deliveries`)は exception 適用、ドメイン名タイムスタンプ(`deliveredAt` / `snapshotDate` / `attemptedAt`)のみ
+- スナップショット系の PK は `(snapshotDate, symbol)`(ISO 文字列での日次キー)
 
 ## 8. ソース定義
 
@@ -331,15 +339,27 @@ prompt caching の最小キャッシュサイズ:
 - **Phase 2 で導入**:
   - Stage 2 を fixture 入力で叩き、LLM-as-judge で品質スコア(回帰検知)
 
-## 14. 検証 TODO (Phase 1 着手前に解決)
+## 14. 検証 TODO
 
-1. **Workers から Reuters / Bloomberg / Nikkei xTech RSS が取得可能か**
-   - Claude Code WebFetch は Reuters でブロックされた。Workers の IP レンジでは取得できる可能性が高いが、Phase 1 の最初 30 分で確認
-2. **Workers から iShares / Global X CSV が取得可能か** (ADR-0004 参照)
-3. **TDnet 開示の取得方法**(公式 RSS なしを確認、HTML scrape の難度と利用規約)
-4. **Yahoo Finance の `^SOX` などインデックス取得が Workers から安定するか**
-5. **Discord Webhook の SUPPRESS_NOTIFICATIONS flag (4096) が現在も有効か**
-6. **Anthropic Console で月予算 $20 設定** が完了しているか(ADR-0006 Layer 1、Phase 1 開始時の必須手順)
+Phase 1 着手前に解決した項目と、Phase 1.5 以降に残った項目を区別する。
+
+### 解決済み(2026-05-23 検証)
+
+- ✅ **FRB / BOJ / Nikkei xTech RSS** — ローカル curl で 200、本文込み(または冒頭)取得可。`scripts/verify-sources.sh` で再現可能
+- ✅ **BBC Business RSS** — 代替候補として 200 取得確認、Reuters 不在の補完に採用
+- ✅ **Discord 6000字制限** — ADR-0003 に公式仕様確認結果を反映、4 メッセージ分割で対応(Phase 1 は 1 領域のみなので 1 メッセージ)
+- ✅ **Anthropic 2026 価格** — `console.anthropic.com/docs/pricing` で Haiku 4.5 $1/$5、Sonnet 4.6 $3/$15、Opus 4.7 $5/$25 を確認
+- ✅ **Prompt caching の最小サイズ** — Sonnet 4.6 = 1024 tokens、Haiku 4.5 / Opus 4.7 = 4096 tokens(Sonnet のみ caching 効果が見込める)
+- ✅ **Workers Cron Trigger の CPU 上限** — `>=1h interval` で 15 分、fetch 待ちは CPU 時間外 → 設計通り Queues 不要
+
+### Phase 1.5 以降の宿題(検証結果が NG または未確定)
+
+- ❌ **Reuters RSS** (`technology/feed`, `markets/feed`) — ローカル curl で 401(認証必須化)。Phase 1.5 でも復活見込み低く、**BBC Business + 国内系で代替**確定
+- ❌ **Yahoo Finance `query1` エンドポイント**(`^SOX`, `^VIX` 等) — ローカル curl で 401。**Phase 1.5 で代替検討**(Alpha Vantage、Finnhub、Stooq、Polygon の無料層)
+- ❌ **TDnet 開示の公式 RSS** — 提供なし確定(`release.tdnet.info` は 403)。Phase 2 で I-list HTML スクレイピング検討
+- ⏳ **Workers から RSS / iShares CSV への到達性** — 実 Workers 環境での fetch 確認は Task 14 のデプロイ後リハで実施(Cloudflare IP が Reuters/iShares で 403 にならないか)
+- ⏳ **Discord Webhook の SUPPRESS_NOTIFICATIONS flag (4096)** — Phase 1.5 で 4 メッセージ分割実装時に動作確認
+- ⏳ **Anthropic Console で月予算 $20 設定** — ユーザー手動操作(ADR-0006 Layer 1)、Task 14 の Step 1.5 で実施
 
 ## 15. Phase ロードマップ
 
