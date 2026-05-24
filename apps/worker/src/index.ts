@@ -16,7 +16,7 @@ export default {
   ): Promise<void> {
     console.log({ cron: event.cron, time: new Date().toISOString() });
     switch (event.cron) {
-      case '30 21 * * 0-4':
+      case '30 21 * * SUN-THU':
         ctx.waitUntil(runDaily(env));
         break;
       default:

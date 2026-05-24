@@ -38,7 +38,7 @@ Cron handler の手動発火:
 cd apps/worker
 pnpm wrangler dev --test-scheduled
 # 別ターミナル
-curl "http://localhost:8787/__scheduled?cron=30+21+*+*+0-4"
+curl "http://localhost:8787/__scheduled?cron=30+21+*+*+SUN-THU"
 ```
 
 ソース到達性チェック(初回 + サードパーティ仕様変更を疑った時に):
@@ -85,7 +85,7 @@ pnpm wrangler secret put DISCORD_WEBHOOK_URL
 cd apps/worker
 pnpm wrangler dev --test-scheduled --remote
 # 別ターミナル
-curl "http://localhost:8787/__scheduled?cron=30+21+*+*+0-4"
+curl "http://localhost:8787/__scheduled?cron=30+21+*+*+SUN-THU"
 ```
 
 → Discord チャネルに半導体領域のダイジェスト 1 通が届けば Phase 1 完了。
@@ -106,7 +106,7 @@ curl "http://localhost:8787/__scheduled?cron=30+21+*+*+0-4"
 ## アーキテクチャ概要
 
 ```
-Cron Trigger (30 21 * * 0-4 UTC = JST 6:30 平日)
+Cron Trigger (30 21 * * SUN-THU UTC = JST 6:30 平日)
     ↓
 RSS Fetcher (4 sources: FRB / BOJ / Nikkei xTech / BBC Business)
     ↓

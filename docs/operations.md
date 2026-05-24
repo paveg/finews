@@ -86,7 +86,7 @@ pnpm wrangler dev --test-scheduled --remote
 
 ターミナル B:
 ```bash
-curl "http://localhost:8787/__scheduled?cron=30+21+*+*+0-4"
+curl "http://localhost:8787/__scheduled?cron=30+21+*+*+SUN-THU"
 ```
 
 - [ ] ターミナル A のログに `{ job: 'daily', articlesFetched: N, fresh: M, extracted: K, ... }` が出る
@@ -95,7 +95,7 @@ curl "http://localhost:8787/__scheduled?cron=30+21+*+*+0-4"
 
 ### Step 8: 本番 Cron でリハーサル(任意)
 
-Cloudflare Dashboard → Workers → finews → Triggers タブから `30 21 * * 0-4` の右端の **"Run"** ボタンで manual trigger。
+Cloudflare Dashboard → Workers → finews → Triggers タブから `30 21 * * SUN-THU` の右端の **"Run"** ボタンで manual trigger。
 
 - [ ] Discord に届くことを確認(Step 7 と同じ経路だが、本番 Worker 自身が走る)
 

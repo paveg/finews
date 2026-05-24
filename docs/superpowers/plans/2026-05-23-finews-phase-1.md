@@ -1847,7 +1847,7 @@ export default {
   ): Promise<void> {
     console.log({ cron: event.cron, time: new Date().toISOString() });
     switch (event.cron) {
-      case '30 21 * * 0-4':
+      case '30 21 * * SUN-THU':
         ctx.waitUntil(runDaily(env));
         break;
       default:
@@ -1883,7 +1883,7 @@ git commit -m "feat: wire daily job (RSS -> Stage1 -> Stage2 -> Discord)"
 ```toml
 [triggers]
 crons = [
-  "30 21 * * 0-4"
+  "30 21 * * SUN-THU"
 ]
 ```
 
@@ -1926,7 +1926,7 @@ Run: `cd apps/worker && pnpm wrangler dev --test-scheduled --remote --var ENVIRO
 別ターミナルで:
 
 ```bash
-curl "http://localhost:8787/__scheduled?cron=30+21+*+*+0-4"
+curl "http://localhost:8787/__scheduled?cron=30+21+*+*+SUN-THU"
 ```
 
 Expected:
@@ -1935,7 +1935,7 @@ Expected:
 
 - [ ] **Step 6: 本番 Cron でリハーサル**
 
-Cloudflare Dashboard で Worker の "Triggers" タブから `30 21 * * 0-4` を **manual trigger** で発火、Discord 到達を確認。
+Cloudflare Dashboard で Worker の "Triggers" タブから `30 21 * * SUN-THU` を **manual trigger** で発火、Discord 到達を確認。
 
 - [ ] **Step 7: Commit**
 
@@ -1979,7 +1979,7 @@ Phase 1 実装中に判明し、設計に取り込んだ変更:
 
 設計書セクションとの突合せ:
 
-- ✅ §3 配信スケジュール → Task 14 で `30 21 * * 0-4` のみ設定(他は Phase 1.5+)
+- ✅ §3 配信スケジュール → Task 14 で `30 21 * * SUN-THU` のみ設定(他は Phase 1.5+)
 - ✅ §5.1 daily データフロー → Task 13 で 1-9 ステップを実装(ETF/market は省略)
 - ✅ §7 D1 スキーマ → Task 3 で全テーブル作成
 - ✅ §8.1 ニュースソース → Task 4 検証結果に応じて Task 5 で確定

@@ -6,7 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "finews"
-database_id = "475f3d97-f340-4ebc-80da-ca9b00042b77"
+database_id = "475f3d97-f34SUN-THUebc-80da-ca9b00042b77"
 migrations_dir = "src/db/migrations"
 
 [vars]
@@ -14,5 +14,5 @@ ENVIRONMENT = "development"
 
 [triggers]
 crons = [
-  "30 21 * * 0-4",
+  "30 21 * * SUN-THU",
 ]

@@ -24,8 +24,8 @@ Accepted (2026-05-23)
 
 finews のすべての Cron は **>=1h interval**:
 
-- daily `30 21 * * 0-4` (1日1回)
-- market `0 22 * * 0-4` (1日1回)
+- daily `30 21 * * SUN-THU` (1日1回)
+- market `0 22 * * SUN-THU` (1日1回)
 - weekly `30 23 * * 5` (週1回)
 - monthly `0 0 1 * *` (月1回)
 
@@ -41,8 +41,8 @@ export default {
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     const cron = event.cron;
     switch (cron) {
-      case '30 21 * * 0-4': return ctx.waitUntil(runDaily(env));
-      case '0 22 * * 0-4':  return ctx.waitUntil(runMarket(env));
+      case '30 21 * * SUN-THU': return ctx.waitUntil(runDaily(env));
+      case '0 22 * * SUN-THU':  return ctx.waitUntil(runMarket(env));
       case '30 23 * * 5':   return ctx.waitUntil(runWeekly(env));
       case '0 0 1 * *':     return ctx.waitUntil(runMonthly(env));
     }
