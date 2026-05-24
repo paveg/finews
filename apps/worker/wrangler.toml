@@ -11,3 +11,8 @@ migrations_dir = "src/db/migrations"
 
 [vars]
 ENVIRONMENT = "development"
+
+[triggers]
+crons = [
+  "30 21 * * 0-4",
+]
