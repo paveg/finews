@@ -12,8 +12,13 @@ import type { ExtractedArticle } from '@finews/shared';
 import type { Env } from '../index';
 
 const PHASE_1_DOMAIN: Domain = 'semiconductor';
+const MAX_ARTICLES_FOR_STAGE1 = 10;
 const MAX_ARTICLES_FOR_STAGE2 = 6;
+const STAGE1_CONCURRENCY = 8;
 const DEDUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+// fetch handler (/__run-daily リハ用) の wall time は 30 秒固定。
+// scheduled handler 経由(natural cron)なら 15 分 CPU 使えるが、
+// リハ可能にするため Stage 1 を絞り + 並列度を上げる。
 
 export async function runDaily(env: Env): Promise<void> {
   const db = createDb(env.DB);
@@ -37,15 +42,15 @@ export async function runDaily(env: Env): Promise<void> {
     const existing = new Set(existingRows.map((r) => r.id));
     const fresh = candidates.filter((a) => !existing.has(a.id));
 
-    // 3. rank by recency, cap at 15
+    // 3. rank by recency, cap to fit fetch handler 30s wall time
     const ranked = fresh
       .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
-      .slice(0, 15);
+      .slice(0, MAX_ARTICLES_FOR_STAGE1);
 
-    // 4. Stage 1 with concurrency 3
+    // 4. Stage 1 with concurrency to keep total wall time under ~20s
     const extracted: Array<{ raw: typeof ranked[0]; ex: ExtractedArticle }> = [];
-    for (let i = 0; i < ranked.length; i += 3) {
-      const batch = ranked.slice(i, i + 3);
+    for (let i = 0; i < ranked.length; i += STAGE1_CONCURRENCY) {
+      const batch = ranked.slice(i, i + STAGE1_CONCURRENCY);
       const results = await Promise.allSettled(
         batch.map((a) =>
           extractArticle(

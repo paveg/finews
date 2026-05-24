@@ -96,6 +96,12 @@ export type Stage1Input = {
   description: string;
 };
 
+function ensureArray<T>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[];
+  if (value === undefined || value === null || value === '') return [];
+  return [value as T];
+}
+
 export async function extractArticle(
   input: Stage1Input,
   apiKey: string,
@@ -130,7 +136,19 @@ export async function extractArticle(
     );
   }
 
-  const raw = v.parse(ExtractedArticleSchema, toolUse.input);
+  // LLM の癖補正: tool input_schema で array 指定しても、要素 1 件のとき
+  // Claude が裸の文字列/オブジェクトで返すことがある(例: tickers: "9020.T")。
+  // Valibot が型エラーで失敗する前にスカラ → 配列に正規化する。
+  const input = toolUse.input as Record<string, unknown>;
+  const normalized = {
+    ...input,
+    tickers: ensureArray(input.tickers),
+    ticker_aliases_used: ensureArray(input.ticker_aliases_used),
+    indicators: ensureArray(input.indicators),
+    key_numbers: ensureArray(input.key_numbers),
+    glossary_terms: ensureArray(input.glossary_terms),
+  };
+  const raw = v.parse(ExtractedArticleSchema, normalized);
 
   // Canonicalize: LLM が maxLength を超過することがあるため、契約値に正規化する。
   // schema 側で maxLength を持たないのは、超過時に全体失敗(=コスト全損)するより
