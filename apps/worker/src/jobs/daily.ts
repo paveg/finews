@@ -54,8 +54,21 @@ export async function runDaily(env: Env): Promise<void> {
           ).then((ex) => ({ raw: a, ex })),
         ),
       );
-      for (const r of results) {
-        if (r.status === 'fulfilled') extracted.push(r.value);
+      for (let idx = 0; idx < results.length; idx++) {
+        const r = results[idx];
+        if (!r) continue;
+        if (r.status === 'fulfilled') {
+          extracted.push(r.value);
+        } else {
+          const article = batch[idx];
+          console.warn({
+            job: 'daily',
+            stage: 'stage1',
+            source: article?.source,
+            url: article?.url,
+            error: String(r.reason),
+          });
+        }
       }
     }
 
