@@ -7,6 +7,7 @@ export interface Env {
   DISCORD_WEBHOOK_URL: string;
   ENVIRONMENT: string;
   RUN_SECRET: string;
+  ENABLE_MANUAL_TRIGGER?: string;
 }
 
 export default {
@@ -25,15 +26,16 @@ export default {
     }
   },
 
-  // 本番リハ用エンドポイント。Cloudflare Dashboard / wrangler に
-  // manual cron trigger 機能がないため、secret 保護した HTTP で
-  // scheduled handler 相当を起動する。Phase 1.5 で weekly/monthly が
-  // 増えたらパスで分岐する。
+  // 手動トリガー。デフォルト無効。有効化:
+  //   wrangler.toml の [vars] に ENABLE_MANUAL_TRIGGER = "true" を追加
   async fetch(
     req: Request,
     env: Env,
     ctx: ExecutionContext,
   ): Promise<Response> {
+    if (env.ENABLE_MANUAL_TRIGGER !== 'true') {
+      return new Response('not found\n', { status: 404 });
+    }
     const url = new URL(req.url);
     if (url.pathname !== '/__run-daily') {
       return new Response('not found\n', { status: 404 });
