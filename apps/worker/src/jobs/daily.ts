@@ -16,6 +16,7 @@ import { generateDailySummary } from '../summarizer/stage2_daily';
 import { isWatchlistMatched } from '../matchers/watchlist';
 import { sendForumDigest, sendPlainText, DOMAIN_COLORS, DOMAIN_TITLES } from '../notifier/discord';
 import { BudgetTracker, BudgetExceededError } from '../lib/budget-guard';
+import { isMarketHoliday } from '../config/holidays';
 import type { MarketDataForPrompt } from '../summarizer/prompts';
 import type { ExtractedArticle } from '@finews/shared';
 import type { Env } from '../index';
@@ -108,6 +109,24 @@ export async function runDaily(env: Env): Promise<void> {
   const db = createDb(env.DB);
   const tracker = new BudgetTracker();
   const startedAt = Date.now();
+
+  // 0. Holiday check — skip if both US and JP markets are closed
+  const today = new Date();
+  if (isMarketHoliday(today, 'us') && isMarketHoliday(today, 'jp')) {
+    console.log({ job: 'daily', skipped: 'market_holiday' });
+    await db.insert(deliveries).values({
+      id: crypto.randomUUID(),
+      jobType: 'daily',
+      step: 'holiday_check',
+      status: 'skipped',
+      error: 'US + JP both closed',
+      durationMs: Date.now() - startedAt,
+      inputTokens: 0,
+      outputTokens: 0,
+      costUsdMicro: 0,
+    });
+    return;
+  }
 
   try {
     // 1. RSS fetch + Market data fetch (parallel)
