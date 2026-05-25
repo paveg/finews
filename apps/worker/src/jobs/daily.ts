@@ -42,16 +42,29 @@ async function fetchMarketQuotes(
   db: Db,
 ): Promise<{ quotes: MarketQuote[]; context: MarketQuote[] } | null> {
   try {
-    const watchlistSymbols = watchlistEntries.map(toStooqSymbol);
-    const contextSymbols = CONTEXT_INDICATORS.map((i) => i.stooqSymbol);
+    const today = new Date();
+    const usOpen = !isMarketHoliday(today, 'us');
+    const jpOpen = !isMarketHoliday(today, 'jp');
+
+    const activeEntries = watchlistEntries.filter(
+      (e) => (e.market === 'us' && usOpen) || (e.market === 'jp' && jpOpen),
+    );
+    const activeIndicators = CONTEXT_INDICATORS.filter(
+      (i) => i.market === null || (i.market === 'us' && usOpen) || (i.market === 'jp' && jpOpen),
+    );
+
+    const watchlistSymbols = activeEntries.map(toStooqSymbol);
+    const contextSymbols = activeIndicators.map((i) => i.stooqSymbol);
     const allStooqSymbols = [...watchlistSymbols, ...contextSymbols];
+
+    if (allStooqSymbols.length === 0) return { quotes: [], context: [] };
 
     const [stooqRows, vixQuote] = await Promise.all([
       fetchStooqPrices(allStooqSymbols),
-      fetchVix(),
+      usOpen ? fetchVix() : Promise.resolve(null),
     ]);
 
-    const today = new Date().toISOString().split('T')[0] ?? '';
+    const todayStr = today.toISOString().split('T')[0] ?? '';
     const yesterday = new Date(Date.now() - 86_400_000).toISOString().split('T')[0] ?? '';
 
     const prevSnapshots = await db
@@ -61,7 +74,7 @@ async function fetchMarketQuotes(
     const prevMap = new Map(prevSnapshots.map((r) => [r.symbol, r.price]));
 
     const quotes: MarketQuote[] = [];
-    for (const entry of watchlistEntries) {
+    for (const entry of activeEntries) {
       const stooqSym = toStooqSymbol(entry);
       const row = stooqRows.find((r) => r.symbol === stooqSym);
       if (!row) continue;
@@ -71,7 +84,7 @@ async function fetchMarketQuotes(
     }
 
     const context: MarketQuote[] = [];
-    for (const ind of CONTEXT_INDICATORS) {
+    for (const ind of activeIndicators) {
       const row = stooqRows.find((r) => r.symbol === ind.stooqSymbol);
       if (!row) continue;
       const prev = prevMap.get(ind.name);
@@ -82,13 +95,13 @@ async function fetchMarketQuotes(
 
     const snapshotsToInsert = [
       ...quotes.map((q) => ({
-        snapshotDate: today,
+        snapshotDate: todayStr,
         symbol: q.symbol,
         price: q.close,
         changePct1d: q.changePct1d,
       })),
       ...context.map((c) => ({
-        snapshotDate: today,
+        snapshotDate: todayStr,
         symbol: c.symbol,
         price: c.close,
         changePct1d: c.changePct1d,

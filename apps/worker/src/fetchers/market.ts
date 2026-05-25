@@ -15,9 +15,9 @@ export type StooqRow = {
 };
 
 export const CONTEXT_INDICATORS = [
-  { name: 'S&P 500', stooqSymbol: '^SPX' },
-  { name: '日経平均', stooqSymbol: '^NKX' },
-  { name: 'USD/JPY', stooqSymbol: 'USDJPY' },
+  { name: 'S&P 500', stooqSymbol: '^SPX', market: 'us' as const },
+  { name: '日経平均', stooqSymbol: '^NKX', market: 'jp' as const },
+  { name: 'USD/JPY', stooqSymbol: 'USDJPY', market: null },
 ] as const;
 
 const VIX_URL = 'https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?range=2d&interval=1d';
