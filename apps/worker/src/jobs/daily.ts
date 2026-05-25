@@ -17,16 +17,14 @@ import { isWatchlistMatched } from '../matchers/watchlist';
 import { sendForumDigest, sendPlainText, DOMAIN_COLORS, DOMAIN_TITLES } from '../notifier/discord';
 import { BudgetTracker, BudgetExceededError } from '../lib/budget-guard';
 import { isMarketHoliday } from '../config/holidays';
-import type { MarketDataForPrompt } from '../summarizer/prompts';
+import { SCORING, MONTHLY_BUDGET } from '../config/scoring';
+import type { MarketDataForPrompt, PreviousContext } from '../summarizer/prompts';
 import type { ExtractedArticle } from '@finews/shared';
 import type { Env } from '../index';
 import type { Db } from '../db/client';
 
 const PHASE_1_DOMAIN: Domain = 'semiconductor';
-const MAX_ARTICLES_FOR_STAGE1 = 10;
-const MAX_ARTICLES_FOR_STAGE2 = 6;
-const STAGE1_CONCURRENCY = 8;
-const DEDUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const DEDUP_WINDOW_MS = SCORING.dedupWindowDays * 24 * 60 * 60 * 1000;
 // fetch handler (/__run-daily リハ用) の wall time は 30 秒固定。
 // scheduled handler 経由(natural cron)なら 15 分 CPU 使えるが、
 // リハ可能にするため Stage 1 を絞り + 並列度を上げる。
@@ -59,12 +57,37 @@ async function fetchMarketQuotes(
 
     if (allStooqSymbols.length === 0) return { quotes: [], context: [] };
 
+    const todayStr = today.toISOString().split('T')[0] ?? '';
+
+    // Same-day cache: skip fetch if today's snapshots already exist
+    const cached = await db
+      .select({ symbol: marketSnapshots.symbol, price: marketSnapshots.price, changePct1d: marketSnapshots.changePct1d })
+      .from(marketSnapshots)
+      .where(eq(marketSnapshots.snapshotDate, todayStr));
+    if (cached.length > 0) {
+      const cacheMap = new Map(cached.map((r) => [r.symbol, r]));
+      const quotes: MarketQuote[] = activeEntries
+        .filter((e) => cacheMap.has(e.ticker))
+        .map((e) => {
+          const c = cacheMap.get(e.ticker)!;
+          return { symbol: e.ticker, close: c.price, changePct1d: c.changePct1d, date: todayStr };
+        });
+      const context: MarketQuote[] = activeIndicators
+        .filter((i) => cacheMap.has(i.name))
+        .map((i) => {
+          const c = cacheMap.get(i.name)!;
+          return { symbol: i.name, close: c.price, changePct1d: c.changePct1d, date: todayStr };
+        });
+      const vix = cacheMap.get('VIX');
+      if (vix) context.push({ symbol: 'VIX', close: vix.price, changePct1d: vix.changePct1d, date: todayStr });
+      console.log({ job: 'daily', stage: 'market_fetch', cache_hit: true, symbols: cached.length });
+      return { quotes, context };
+    }
+
     const [stooqRows, vixQuote] = await Promise.all([
       fetchStooqPrices(allStooqSymbols),
       usOpen ? fetchVix() : Promise.resolve(null),
     ]);
-
-    const todayStr = today.toISOString().split('T')[0] ?? '';
     const yesterday = new Date(Date.now() - 86_400_000).toISOString().split('T')[0] ?? '';
 
     const prevSnapshots = await db
@@ -141,6 +164,29 @@ export async function runDaily(env: Env): Promise<void> {
     return;
   }
 
+  // 0b. Monthly cost guard — refuse to run if monthly spend exceeds limit
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
+  const monthlySpend = await db
+    .select({ total: deliveries.costUsdMicro })
+    .from(deliveries)
+    .where(gte(deliveries.attemptedAt, monthStart));
+  const totalCostThisMonth = monthlySpend.reduce((sum, r) => sum + (r.total ?? 0), 0);
+  if (totalCostThisMonth >= MONTHLY_BUDGET.limitUsdMicro) {
+    console.warn({ job: 'daily', skipped: 'monthly_budget_exceeded', totalCostThisMonth });
+    await db.insert(deliveries).values({
+      id: crypto.randomUUID(),
+      jobType: 'daily',
+      step: 'monthly_budget',
+      status: 'skipped',
+      error: `Monthly cost $${(totalCostThisMonth / 1_000_000).toFixed(2)} >= limit $${(MONTHLY_BUDGET.limitUsdMicro / 1_000_000).toFixed(2)}`,
+      durationMs: Date.now() - startedAt,
+      inputTokens: 0,
+      outputTokens: 0,
+      costUsdMicro: 0,
+    });
+    return;
+  }
+
   try {
     // 1. RSS fetch + Market data fetch (parallel)
     const [fetched, marketResult] = await Promise.all([
@@ -164,12 +210,12 @@ export async function runDaily(env: Env): Promise<void> {
     // 3. rank by recency, cap to fit fetch handler 30s wall time
     const ranked = fresh
       .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
-      .slice(0, MAX_ARTICLES_FOR_STAGE1);
+      .slice(0, SCORING.maxArticlesForStage1);
 
     // 4. Stage 1 with concurrency to keep total wall time under ~20s
     const extracted: Array<{ raw: typeof ranked[0]; ex: ExtractedArticle }> = [];
-    for (let i = 0; i < ranked.length; i += STAGE1_CONCURRENCY) {
-      const batch = ranked.slice(i, i + STAGE1_CONCURRENCY);
+    for (let i = 0; i < ranked.length; i += SCORING.stage1Concurrency) {
+      const batch = ranked.slice(i, i + SCORING.stage1Concurrency);
       const results = await Promise.allSettled(
         batch.map((a) =>
           extractArticle(
@@ -217,7 +263,7 @@ export async function runDaily(env: Env): Promise<void> {
     const stage2Input = extracted
       .filter(({ ex }) => ex.significance >= 3)
       .sort((a, b) => b.ex.significance - a.ex.significance)
-      .slice(0, MAX_ARTICLES_FOR_STAGE2)
+      .slice(0, SCORING.maxArticlesForStage2)
       .map(({ raw, ex }) => ({ ...ex, sourceUrl: raw.url }));
 
     if (stage2Input.length === 0) {
@@ -237,10 +283,39 @@ export async function runDaily(env: Env): Promise<void> {
       return;
     }
 
-    // 7. Stage 2
-    const marketData: MarketDataForPrompt | undefined = marketResult ?? undefined;
+    // 7. Sanity gate: discard stale market data (older than 2 trading days)
+    const todayDate = today.toISOString().split('T')[0] ?? '';
+    const staleThreshold = new Date(Date.now() - 3 * 86_400_000).toISOString().split('T')[0] ?? '';
+    const marketData: MarketDataForPrompt | undefined = marketResult
+      ? {
+          quotes: marketResult.quotes.filter((q) => q.date >= staleThreshold),
+          context: marketResult.context.filter((c) => c.date >= staleThreshold),
+        }
+      : undefined;
+    if (marketResult && marketData && marketData.quotes.length < marketResult.quotes.length) {
+      console.warn({
+        job: 'daily',
+        stage: 'sanity_gate',
+        droppedStaleQuotes: marketResult.quotes.length - marketData.quotes.length,
+        threshold: staleThreshold,
+      });
+    }
+
+    // 8. Stage 2 (with previous day context for state-change filter)
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().split('T')[0] ?? '';
+    const prevSnaps = await db
+      .select({ symbol: marketSnapshots.symbol, price: marketSnapshots.price, changePct1d: marketSnapshots.changePct1d })
+      .from(marketSnapshots)
+      .where(eq(marketSnapshots.snapshotDate, yesterday));
+    const previousContext = prevSnaps.length > 0
+      ? {
+          quotes: prevSnaps.filter((s) => watchlistEntries.some((e) => e.ticker === s.symbol)).map((s) => ({ symbol: s.symbol, close: s.price, changePct1d: s.changePct1d, date: yesterday })),
+          context: prevSnaps.filter((s) => !watchlistEntries.some((e) => e.ticker === s.symbol)).map((s) => ({ symbol: s.symbol, close: s.price, changePct1d: s.changePct1d, date: yesterday })),
+        }
+      : undefined;
+
     const summaryText = await generateDailySummary(
-      { domain: PHASE_1_DOMAIN, articles: stage2Input, marketData },
+      { domain: PHASE_1_DOMAIN, articles: stage2Input, marketData, previousContext },
       env.ANTHROPIC_API_KEY,
       tracker,
     );

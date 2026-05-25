@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { ExtractedArticle } from '@finews/shared';
 import { STAGE2_DAILY_SYSTEM, stage2DailyUser } from './prompts';
-import type { MarketDataForPrompt } from './prompts';
+import type { MarketDataForPrompt, PreviousContext } from './prompts';
 import { watchlistTickers } from '../config/watchlist';
 import type { Domain } from '../config/sources';
 import { BudgetTracker } from '../lib/budget-guard';
@@ -11,6 +11,7 @@ export type Stage2DailyInput = {
   domain: Domain;
   articles: ExtractedArticle[];
   marketData?: MarketDataForPrompt;
+  previousContext?: PreviousContext;
 };
 
 export async function generateDailySummary(
@@ -35,7 +36,7 @@ export async function generateDailySummary(
       messages: [
         {
           role: 'user',
-          content: stage2DailyUser(input.domain, input.articles, watchlistTickers, input.marketData),
+          content: stage2DailyUser(input.domain, input.articles, watchlistTickers, input.marketData, input.previousContext),
         },
       ],
     }),
