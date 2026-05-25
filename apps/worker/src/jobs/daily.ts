@@ -88,7 +88,7 @@ export async function runDaily(env: Env): Promise<void> {
           title: raw.title,
           publishedAt: raw.publishedAt,
           extractedJson: JSON.stringify(ex),
-          watchlistMatched: isWatchlistMatched(ex.tickers),
+          watchlistMatched: isWatchlistMatched(ex.tickers, ex.ticker_aliases_used),
           continuingThemeScore: 0,
         })
         .onConflictDoNothing();
