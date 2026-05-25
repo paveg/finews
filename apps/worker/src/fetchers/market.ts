@@ -1,4 +1,5 @@
 import type { WatchlistEntry } from '../config/watchlist';
+import { isResponseTooLarge, MAX_MARKET_BYTES } from '../lib/http-guard';
 
 export type MarketQuote = {
   symbol: string;
@@ -85,6 +86,10 @@ export async function fetchStooqPrices(symbols: string[]): Promise<StooqRow[]> {
   const url = `https://stooq.com/q/l/?s=${query}&f=sd2t2ohlcv&h&e=csv`;
   const res = await fetch(url, { headers: { 'User-Agent': 'finews/0.1.0' } });
   if (!res.ok) return [];
+  if (isResponseTooLarge(res.headers, MAX_MARKET_BYTES)) {
+    console.warn({ fn: 'fetchStooqPrices', rejected: 'response_too_large', contentLength: res.headers.get('content-length') });
+    return [];
+  }
   const csv = await res.text();
   return parseStooqCsv(csv);
 }
@@ -93,6 +98,10 @@ export async function fetchVix(): Promise<MarketQuote | null> {
   try {
     const res = await fetch(VIX_URL);
     if (!res.ok) return null;
+    if (isResponseTooLarge(res.headers, MAX_MARKET_BYTES)) {
+      console.warn({ fn: 'fetchVix', rejected: 'response_too_large', contentLength: res.headers.get('content-length') });
+      return null;
+    }
     const json = await res.json();
     return parseVixJson(json);
   } catch {

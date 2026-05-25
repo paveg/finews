@@ -1,6 +1,7 @@
 import { XMLParser } from 'fast-xml-parser';
 import type { NewsSource, Domain } from '../config/sources';
 import { articleId } from '../lib/dedup';
+import { isResponseTooLarge, MAX_RSS_BYTES } from '../lib/http-guard';
 
 export type FetchedArticle = {
   id: string;
@@ -20,10 +21,15 @@ async function fetchOne(source: NewsSource): Promise<FetchedArticle[]> {
     console.warn({ source: source.id, status: res.status });
     return [];
   }
+  if (isResponseTooLarge(res.headers, MAX_RSS_BYTES)) {
+    console.warn({ source: source.id, rejected: 'response_too_large', contentLength: res.headers.get('content-length') });
+    return [];
+  }
   const xml = await res.text();
   const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: '@_',
+    processEntities: false,
   });
   const parsed = parser.parse(xml);
 
