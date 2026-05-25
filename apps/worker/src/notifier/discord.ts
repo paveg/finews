@@ -1,4 +1,4 @@
-const DOMAIN_COLORS: Record<string, number> = {
+export const DOMAIN_COLORS: Record<string, number> = {
   semiconductor: 0x3498db,
   ai_tech: 0x9b59b6,
   us_macro: 0x2ecc71,
@@ -7,7 +7,7 @@ const DOMAIN_COLORS: Record<string, number> = {
   market_context: 0x95a5a6,
 };
 
-const DOMAIN_TITLES: Record<string, string> = {
+export const DOMAIN_TITLES: Record<string, string> = {
   semiconductor: '半導体・AIテック',
   ai_tech: 'AIテック',
   us_macro: '米国マクロ',

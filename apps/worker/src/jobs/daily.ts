@@ -14,7 +14,7 @@ import { watchlistEntries } from '../config/watchlist';
 import { extractArticle } from '../summarizer/stage1';
 import { generateDailySummary } from '../summarizer/stage2_daily';
 import { isWatchlistMatched } from '../matchers/watchlist';
-import { sendForumDigest, sendPlainText } from '../notifier/discord';
+import { sendForumDigest, sendPlainText, DOMAIN_COLORS, DOMAIN_TITLES } from '../notifier/discord';
 import { BudgetTracker, BudgetExceededError } from '../lib/budget-guard';
 import type { MarketDataForPrompt } from '../summarizer/prompts';
 import type { ExtractedArticle } from '@finews/shared';
@@ -181,12 +181,12 @@ export async function runDaily(env: Env): Promise<void> {
         .onConflictDoNothing();
     }
 
-    // 6. Stage 2 input filter
+    // 6. Stage 2 input filter (keep sourceUrl for link attribution)
     const stage2Input = extracted
       .filter(({ ex }) => ex.significance >= 3)
       .sort((a, b) => b.ex.significance - a.ex.significance)
       .slice(0, MAX_ARTICLES_FOR_STAGE2)
-      .map(({ ex }) => ex);
+      .map(({ raw, ex }) => ({ ...ex, sourceUrl: raw.url }));
 
     if (stage2Input.length === 0) {
       console.log({ job: 'daily', skipped: 'no significant articles' });
@@ -216,10 +216,11 @@ export async function runDaily(env: Env): Promise<void> {
     // 8. Deliver via Forum thread
     const sections = splitSections(summaryText);
     const todayStr = new Date().toISOString().split('T')[0] ?? '';
+    const domainTitle = DOMAIN_TITLES[PHASE_1_DOMAIN] ?? PHASE_1_DOMAIN;
     await sendForumDigest(env.DISCORD_WEBHOOK_URL, {
-      threadName: `${todayStr} 半導体ダイジェスト`,
-      title: '📰 半導体・AIテック',
-      color: 0x3498db,
+      threadName: `${todayStr} ${domainTitle}`,
+      title: `📰 ${domainTitle}`,
+      color: DOMAIN_COLORS[PHASE_1_DOMAIN] ?? 0x95a5a6,
       overview: sections.overview,
       detail: sections.detail,
       glossary: sections.glossary,
