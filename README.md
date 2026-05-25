@@ -1,7 +1,20 @@
 # finews
 
 平日朝・週次・月次に金融マーケットダイジェストを Discord に配信する個人向けパイプライン。
-Cloudflare Workers + D1 + Hono + Drizzle + Anthropic API で構築。
+Cloudflare Workers + D1 + Drizzle + Anthropic API で構築。
+
+```mermaid
+graph LR
+    A[Cron Trigger<br/>21:30 UTC SUN-THU] --> B[RSS Fetcher]
+    A --> C[Market Fetcher<br/>Stooq + Yahoo VIX]
+    B --> D[Stage 1<br/>Haiku 4.5]
+    D --> E[Stage 2<br/>Sonnet 4.6]
+    C --> E
+    E --> F[Discord Forum<br/>3-post thread]
+    D --> G[(D1)]
+    C --> G
+    E --> G
+```
 
 ## ドキュメント
 
@@ -13,8 +26,9 @@ Cloudflare Workers + D1 + Hono + Drizzle + Anthropic API で構築。
 
 ## ステータス
 
-- Phase 1(半導体 1 領域、Discord 1 embed): コード完了、本番デプロイ待ち
-- Phase 1.5+(残り 3 領域、ETF、weekly/monthly): 申し送りメモ参照
+- Phase 1(半導体 1 セクター、Discord embed): 本番稼働中
+- Phase 1.5(値動きシグナル + Forum + ウォッチリスト改善): 本番稼働中
+- Phase 2(残り 3 セクター、weekly/monthly、Gemini 切替): 計画中
 
 ## セットアップ
 
@@ -105,22 +119,91 @@ curl "http://localhost:8787/__scheduled?cron=30+21+*+*+SUN-THU"
 
 ## アーキテクチャ概要
 
+### パイプラインシーケンス
+
+```mermaid
+sequenceDiagram
+    participant Cron as Cron Trigger
+    participant Guard as Guards
+    participant RSS as RSS Fetcher
+    participant Mkt as Market Fetcher
+    participant S1 as Stage 1 (Haiku)
+    participant D1 as D1 Database
+    participant S2 as Stage 2 (Sonnet)
+    participant DC as Discord Forum
+
+    Cron->>Guard: 21:30 UTC (SUN-THU)
+    Guard->>Guard: Holiday check / Monthly budget check
+    par RSS + Market in parallel
+        Guard->>RSS: Fetch 4 sources
+        Guard->>Mkt: Stooq CSV + Yahoo VIX
+    end
+    Mkt->>D1: Cache snapshots (same-day dedup)
+    RSS->>D1: Dedup vs past 7 days
+    RSS->>S1: Top 10 fresh articles
+    S1->>S1: Tool Use extraction (concurrency=8)
+    S1->>D1: Persist articles + watchlist match
+    D1->>S2: Previous day context (state-change filter)
+    S1->>S2: Top 6 (significance >= 3) + sourceUrl
+    Mkt->>S2: Price table + context indicators
+    Note over S2: Sanity gate: drop stale (>3d) data
+    S2->>DC: 3 posts (overview embed / detail / glossary)
+    S2->>D1: Log delivery (tokens, cost, duration)
 ```
-Cron Trigger (30 21 * * SUN-THU UTC = JST 6:30 平日)
-    ↓
-RSS Fetcher (4 sources: FRB / BOJ / Nikkei xTech / BBC Business)
-    ↓
-dedup (sha256 + URL 正規化, 過去 7 日比較)
-    ↓
-Stage 1: Haiku 4.5 (構造化抽出 → Valibot, 並列度 3)
-    ↓
-Watchlist Matcher + articles 永続化
-    ↓
-Stage 2: Sonnet 4.6 (1 領域分析, prompt caching)
-    ↓
-Discord Webhook (1 embed)
-    ↓
-deliveries ログ(tokens + cost 含む)
+
+### コンポーネント構成
+
+```mermaid
+graph TD
+    subgraph "apps/worker/src"
+        direction TB
+        IDX[index.ts<br/>scheduled + fetch handler]
+        JOB[jobs/daily.ts<br/>pipeline orchestration]
+        
+        subgraph Config
+            WL[config/watchlist.ts<br/>11 tickers + aliases]
+            SC[config/scoring.ts<br/>thresholds + budget]
+            HL[config/holidays.ts<br/>US + JP 2026]
+            SR[config/sources.ts<br/>4 RSS sources]
+        end
+        
+        subgraph Fetchers
+            NF[fetchers/news.ts<br/>RSS XML parse]
+            MF[fetchers/market.ts<br/>Stooq + VIX]
+        end
+        
+        subgraph Summarizer
+            S1[summarizer/stage1.ts<br/>Haiku Tool Use]
+            S2[summarizer/stage2_daily.ts<br/>Sonnet analysis]
+            PM[summarizer/prompts.ts<br/>system + user prompts]
+        end
+        
+        subgraph Notifier
+            DC[notifier/discord.ts<br/>Forum thread posting]
+        end
+        
+        subgraph Lib
+            DD[lib/dedup.ts<br/>URL normalize + sha256]
+            BG[lib/budget-guard.ts<br/>per-job cost limit]
+            RT[lib/retry.ts<br/>exponential backoff]
+        end
+    end
+
+    IDX --> JOB
+    JOB --> Config
+    JOB --> Fetchers
+    JOB --> Summarizer
+    JOB --> Notifier
+    JOB --> Lib
+```
+
+### コスト防御の多層構造
+
+```mermaid
+graph LR
+    L1[Layer 1<br/>Anthropic Console<br/>月 $20 hard limit] --> L2[Layer 2<br/>Monthly Budget Guard<br/>D1 集計 >= $20 で skip]
+    L2 --> L3[Layer 3<br/>BudgetTracker<br/>ジョブ単位 token/call 制限]
+    L3 --> L4[Layer 4<br/>Same-day Cache<br/>再実行時 API 不要]
 ```
 
 詳細は[設計書](docs/superpowers/specs/2026-05-23-finews-design.md)参照。
