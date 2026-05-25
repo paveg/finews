@@ -136,7 +136,7 @@ async function fetchMarketQuotes(
 
     return { quotes, context };
   } catch (err) {
-    console.warn({ job: 'daily', stage: 'market_fetch', error: String(err) });
+    console.warn({ job: 'daily', stage: 'market_fetch', error: err instanceof Error ? err.message : 'Unknown error' });
     return null;
   }
 }
@@ -235,7 +235,7 @@ export async function runDaily(env: Env): Promise<void> {
             stage: 'stage1',
             source: article?.source,
             url: article?.url,
-            error: String(r.reason),
+            error: r.reason instanceof Error ? r.reason.message : 'Unknown error',
           });
         }
       }
@@ -389,7 +389,7 @@ export async function runDaily(env: Env): Promise<void> {
           ].join('\n'),
         );
       } catch (notifyErr) {
-        console.error({ notifyErr: String(notifyErr) });
+        console.error({ notifyErr: notifyErr instanceof Error ? notifyErr.message : 'Unknown error' });
       }
       return;
     }
