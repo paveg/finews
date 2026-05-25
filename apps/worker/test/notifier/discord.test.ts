@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { splitContent, buildForumPayload } from '../../src/notifier/discord';
+import { splitContent, buildForumPayload, escapeDiscordMentions } from '../../src/notifier/discord';
 
 describe('splitContent', () => {
   it('returns single chunk when under limit', () => {
@@ -18,6 +18,25 @@ describe('splitContent', () => {
     const chunks = splitContent(text, 2000);
     expect(chunks).toHaveLength(2);
     expect(chunks[0]!.length).toBe(2000);
+  });
+});
+
+describe('escapeDiscordMentions', () => {
+  it('escapes @everyone', () => {
+    expect(escapeDiscordMentions('hello @everyone check this')).toBe('hello @​everyone check this');
+  });
+
+  it('escapes @here', () => {
+    expect(escapeDiscordMentions('alert @here now')).toBe('alert @​here now');
+  });
+
+  it('escapes role/user mentions', () => {
+    expect(escapeDiscordMentions('ping <@123456>')).toBe('ping <@​123456>');
+    expect(escapeDiscordMentions('role <@&789>')).toBe('role <@​&789>');
+  });
+
+  it('leaves normal text unchanged', () => {
+    expect(escapeDiscordMentions('email: user@example.com')).toBe('email: user@example.com');
   });
 });
 

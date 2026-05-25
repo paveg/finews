@@ -16,6 +16,13 @@ export const DOMAIN_TITLES: Record<string, string> = {
   market_context: 'マーケット',
 };
 
+/** Escape Discord mentions to prevent @everyone/@here injection from untrusted content. */
+export function escapeDiscordMentions(text: string): string {
+  return text
+    .replace(/@(everyone|here)/g, '@​$1')
+    .replace(/<@[!&]?\d+>/g, (match) => match.replace('@', '@​'));
+}
+
 export type DailyEmbed = {
   domain: string;
   body: string;
@@ -28,7 +35,7 @@ async function postWebhook(webhookUrl: string, payload: unknown): Promise<void> 
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
-    throw new Error(`Discord webhook failed: ${res.status} ${await res.text()}`);
+    throw new Error(`Discord webhook failed: ${res.status}`);
   }
 }
 
@@ -88,7 +95,7 @@ export function buildForumPayload(overview: ForumOverview) {
     embeds: [
       {
         title: overview.title,
-        description: overview.description.slice(0, 4000),
+        description: escapeDiscordMentions(overview.description).slice(0, 4000),
         color: overview.color,
         timestamp: new Date().toISOString(),
         footer: { text: 'finews / Sonnet 4.6' },
@@ -123,7 +130,7 @@ export async function sendForumDigest(
     body: JSON.stringify(payload),
   });
   if (!createRes.ok) {
-    throw new Error(`Discord forum create failed: ${createRes.status} ${await createRes.text()}`);
+    throw new Error(`Discord forum create failed: ${createRes.status}`);
   }
   const created = (await createRes.json()) as { channel_id: string };
   const threadId = created.channel_id;
@@ -145,7 +152,7 @@ async function postToThread(webhookUrl: string, threadId: string, content: strin
     const res = await fetch(`${webhookUrl}?thread_id=${threadId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: chunk }),
+      body: JSON.stringify({ content: escapeDiscordMentions(chunk) }),
     });
     if (!res.ok) {
       console.warn({ discord_thread_post_failed: res.status, threadId });
