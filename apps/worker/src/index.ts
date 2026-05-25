@@ -38,7 +38,8 @@ export default {
     if (url.pathname !== '/__run-daily') {
       return new Response('not found\n', { status: 404 });
     }
-    if (!env.RUN_SECRET || url.searchParams.get('secret') !== env.RUN_SECRET) {
+    const token = req.headers.get('Authorization')?.replace('Bearer ', '');
+    if (!env.RUN_SECRET || token !== env.RUN_SECRET) {
       return new Response('unauthorized\n', { status: 401 });
     }
     ctx.waitUntil(runDaily(env));
