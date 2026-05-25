@@ -73,7 +73,7 @@ export function parseVixJson(json: unknown): MarketQuote | null {
       symbol: 'VIX',
       close: latestClose,
       changePct1d,
-      date: new Date((result.meta?.regularMarketTime ?? 0) * 1000).toISOString().split('T')[0],
+      date: new Date((result.meta?.regularMarketTime ?? 0) * 1000).toISOString().split('T')[0] ?? '',
     };
   } catch {
     return null;

@@ -22,7 +22,7 @@ describe('parseStooqCsv', () => {
 
   it('handles missing volume (trailing comma)', () => {
     const rows = parseStooqCsv(STOOQ_FIXTURE);
-    expect(rows[3].volume).toBeNull();
+    expect(rows[3]!.volume).toBeNull();
   });
 
   it('skips rows with N/D values', () => {
