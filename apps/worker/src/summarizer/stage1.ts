@@ -94,6 +94,7 @@ const EXTRACT_TOOL: Anthropic.Messages.Tool = {
 export type Stage1Input = {
   title: string;
   description: string;
+  sector?: string;
 };
 
 function ensureArray<T>(value: unknown): T[] {
@@ -120,7 +121,7 @@ export async function extractArticle(
       messages: [
         {
           role: 'user',
-          content: stage1UserPrompt(input.title, input.description),
+          content: stage1UserPrompt(input.title, input.description, input.sector),
         },
       ],
     }),

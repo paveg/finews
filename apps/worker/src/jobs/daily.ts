@@ -219,7 +219,7 @@ export async function runDaily(env: Env): Promise<void> {
       const results = await Promise.allSettled(
         batch.map((a) =>
           extractArticle(
-            { title: a.title, description: a.description },
+            { title: a.title, description: a.description, sector: PHASE_1_DOMAIN },
             env.ANTHROPIC_API_KEY,
             tracker,
           ).then((ex) => ({ raw: a, ex })),

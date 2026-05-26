@@ -20,11 +20,25 @@ export type NewsSource = {
 
 export const newsSources: NewsSource[] = [
   {
+    id: 'semiwiki',
+    type: 'rss',
+    url: 'https://semiwiki.com/feed/',
+    domain: 'semiconductor',
+    priority: 1,
+  },
+  {
+    id: 'digitimes',
+    type: 'rss',
+    url: 'https://www.digitimes.com/rss/daily.xml',
+    domain: 'semiconductor',
+    priority: 1,
+  },
+  {
     id: 'nikkei_xtech',
     type: 'rss',
     url: 'https://xtech.nikkei.com/rss/index.rdf',
     domain: 'semiconductor',
-    priority: 1,
+    priority: 2,
   },
   {
     id: 'frb_press',
