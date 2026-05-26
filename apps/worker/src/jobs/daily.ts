@@ -320,20 +320,49 @@ export async function runDaily(env: Env): Promise<void> {
       tracker,
     );
 
-    // 8. Deliver via Forum thread
+    // 8b. Build market summary (code-side, not LLM-generated)
+    const marketSummaryLines: string[] = [];
+    if (marketData && marketData.quotes.length > 0) {
+      const relevantTickers = new Set(stage2Input.flatMap((a) => (a as { tickers?: string[] }).tickers ?? []));
+      marketSummaryLines.push('📊 **ウォッチリスト速報**');
+      for (const q of marketData.quotes) {
+        const change = q.changePct1d !== null
+          ? `(${q.changePct1d >= 0 ? '+' : ''}${q.changePct1d.toFixed(1)}%)`
+          : '';
+        const comment = relevantTickers.has(q.symbol) ? ' ← 関連ニュースあり' : '';
+        marketSummaryLines.push(`**${q.symbol}** ${q.close} ${change}${comment}`);
+      }
+    }
+    if (marketData && marketData.context.length > 0) {
+      const parts = marketData.context.map((c) => {
+        const change = c.changePct1d !== null
+          ? `(${c.changePct1d >= 0 ? '+' : ''}${c.changePct1d.toFixed(1)}%)`
+          : '';
+        return `${c.symbol} ${c.close}${change}`;
+      });
+      marketSummaryLines.push(`市場背景: ${parts.join(' / ')}`);
+    }
+    if (marketData && marketData.quotes.length === 0 && marketData.context.length === 0) {
+      marketSummaryLines.push('📊 本日の値動きデータは取得できませんでした');
+    }
+
+    // 9. Deliver via Forum thread
     const sections = splitSections(summaryText);
+    const overviewWithMarket = marketSummaryLines.length > 0
+      ? `${sections.overview}\n\n${marketSummaryLines.join('\n')}`
+      : sections.overview;
     const todayStr = new Date().toISOString().split('T')[0] ?? '';
     const domainTitle = DOMAIN_TITLES[PHASE_1_DOMAIN] ?? PHASE_1_DOMAIN;
     await sendForumDigest(env.DISCORD_WEBHOOK_URL, {
       threadName: `${todayStr} ${domainTitle}`,
       title: `📰 ${domainTitle}`,
       color: DOMAIN_COLORS[PHASE_1_DOMAIN] ?? 0x95a5a6,
-      overview: sections.overview,
+      overview: overviewWithMarket,
       detail: sections.detail,
       glossary: sections.glossary,
     });
 
-    // 9. Log success
+    // 10. Log success
     const finalSummary = tracker.summary();
     await db.insert(deliveries).values({
       id: crypto.randomUUID(),
