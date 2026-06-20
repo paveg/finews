@@ -26,8 +26,8 @@ importers:
         specifier: ^5.0.0
         version: 5.8.0
       hono:
-        specifier: ^4.12.0
-        version: 4.12.22
+        specifier: ^4.12.25
+        version: 4.12.25
       valibot:
         specifier: ^1.4.0
         version: 1.4.0(typescript@5.9.3)
@@ -959,8 +959,8 @@ packages:
   get-tsconfig@4.14.0:
     resolution: {integrity: sha512-yTb+8DXzDREzgvYmh6s9vHsSVCHeC0G3PI5bEXNBHtmshPnO+S5O7qgLEOn0I5QvMy6kpZN8K1NKGyilLb93wA==}
 
-  hono@4.12.22:
-    resolution: {integrity: sha512-7fvVPbB92zNRsQke+uiRGwtTuef0tB2Dg4hWxYfFNvkQhIltWoyi0ONReM5LWA+jJWS3nfT5lTq+qbsIpX0IQw==}
+  hono@4.12.25:
+    resolution: {integrity: sha512-2NFaIyNVgJmBs/ecmtGzlmluTFs5cHEWGTdu0t1HBwYzoGXOL5nUQBRMXsXWla5i4KkG//QMzVP88m1+I3fdAQ==}
     engines: {node: '>=16.9.0'}
 
   json-schema-to-ts@3.1.1:
@@ -1931,7 +1931,7 @@ snapshots:
     dependencies:
       resolve-pkg-maps: 1.0.0
 
-  hono@4.12.22: {}
+  hono@4.12.25: {}
 
   json-schema-to-ts@3.1.1:
     dependencies:
